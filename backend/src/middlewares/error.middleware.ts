@@ -1,35 +1,56 @@
 import type { NextFunction, Request, Response } from "express";
+import { Prisma } from "@prisma/client";
+const errorMiddleware = (
+  err: any,
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  let statusCode = 500;
+  let message = "Server Error";
 
-const errorMiddleware = (err: any, req: Request, res: Response, next: NextFunction) => {
-    try {
-        let error = { ...err};
-        error.message = err.message;
-        console.error(err);
+  // ✅ Prisma Known Errors
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    switch (err.code) {
+      case "P2002":
+        statusCode = 400;
+        message = `Duplicate field value entered`;
+        break;
 
-        // Mongoose bad ObjectId
-        if (err.name === "CastError") {
-            const message = 'Resource not found'
-            error = new Error(message)
-            error.statusCode = 404}
-        // Mongoose duplicate key
-        if(err.code === 11000) {
-            const message = 'Duplicate field value entered'
-            error = new Error(message)
-            error.statusCode = 400
-        }
-        // Mongoose validation error
-        if(err.name === 'ValidationError') {
-            const message = Object.values(err.errors).map((val: any) => val.message);
-            error = new Error(message.join(', '));
-            error.statusCode = 400;
-        }
-        res.status(error.statusCode || 500).json({
-            success: false,
-            error: error.message || 'Server Error'
-        });
-    } catch (error) {
-        next(error);
+      case "P2003":
+        statusCode = 400;
+        message = `Invalid foreign key reference`;
+        break;
+
+      case "P2025":
+        statusCode = 404;
+        message = `Resource not found`;
+        break;
+
+      default:
+        statusCode = 400;
+        message = err.message;
     }
-}
+  }
+
+  // ✅ Prisma Validation Error
+  if (err instanceof Prisma.PrismaClientValidationError) {
+    statusCode = 400;
+    message = "Invalid input data";
+  }
+
+  // ✅ Custom errors you throw manually
+  if (err.statusCode) {
+    statusCode = err.statusCode;
+    message = err.message;
+  }
+
+  if (statusCode === 500) console.error("[500]", err);
+
+  res.status(statusCode).json({
+    success: false,
+    message,
+  });
+};
 
 export default errorMiddleware;

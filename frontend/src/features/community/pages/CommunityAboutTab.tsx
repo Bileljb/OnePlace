@@ -1,0 +1,181 @@
+import { useState } from 'react'
+import { useParams } from 'react-router-dom'
+import { Users, FileText, Calendar, Lock, CheckCircle } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { getMockCommunityDetail, getMockMembership } from '@/mocks/communities.mock'
+import { communityApi } from '@/api/community'
+import { formatCount, getGradient, getPricingLabel } from '../utils/community.utils'
+import { JoinModal } from '../components/JoinModal'
+import { UpgradeModal } from '../components/UpgradeModal'
+import { Button } from '@/components/ui/button'
+
+export function CommunityAboutTab() {
+  const { id } = useParams<{ id: string }>()
+  const [joinOpen, setJoinOpen] = useState(false)
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
+
+  const isMock = id?.startsWith('mock-')
+
+  const { data: communityData } = useQuery({
+    queryKey: ['community', id],
+    queryFn: () => communityApi.getById(id!),
+    enabled: !!id && !isMock,
+  })
+
+  const { data: membershipData } = useQuery({
+    queryKey: ['membership', id],
+    queryFn: () => communityApi.getMyMembership(id!),
+    enabled: !!id && !isMock,
+  })
+
+  const community = isMock ? getMockCommunityDetail(id ?? '') : communityData?.data?.community
+  const membership = isMock ? getMockMembership(id ?? '') : membershipData?.data?.membership
+
+  if (!community) return null
+
+  const gradient = getGradient(community.id)
+  const initials = community.name.slice(0, 2).toUpperCase()
+
+  const isActiveMember = membership?.status === 'ACTIVE'
+  const isFreeTierInFreemium =
+    isActiveMember &&
+    community.pricingModel === 'FREEMIUM' &&
+    membership?.membershipTier === 'FREE'
+
+  return (
+    <div className="space-y-6">
+      {/* Header card */}
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className={`h-32 w-full bg-gradient-to-br ${gradient}`} />
+        <div className="p-6">
+          <div className="-mt-12 mb-4">
+            <div
+              className={`flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br ${gradient} border-4 border-card shadow-lg`}
+            >
+              <span className="text-xl font-bold text-white">{initials}</span>
+            </div>
+          </div>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">{community.name}</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Created by {community.creator.firstname} {community.creator.lastname}
+              </p>
+            </div>
+
+            {/* Action button */}
+            {isActiveMember ? (
+              isFreeTierInFreemium ? (
+                <Button onClick={() => setUpgradeOpen(true)} size="sm">
+                  Upgrade
+                </Button>
+              ) : (
+                <div className="flex items-center gap-1.5 text-sm font-medium text-emerald-600">
+                  <CheckCircle className="h-4 w-4" />
+                  Member
+                </div>
+              )
+            ) : (
+              <Button onClick={() => setJoinOpen(true)} size="sm">
+                Join
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {/* Stats */}
+        <div className="rounded-xl border border-border bg-card p-5">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Stats
+          </h2>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 text-sm">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <span className="text-foreground">
+                <span className="font-semibold">{formatCount(community._count.memberships)}</span>{' '}
+                members
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-sm">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+              <span className="text-foreground">
+                <span className="font-semibold">{formatCount(community._count.posts)}</span> posts
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-sm">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="text-foreground">
+                Created{' '}
+                <span className="font-semibold">
+                  {new Date(community.createdAt).toLocaleDateString('en-US', {
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                </span>
+              </span>
+            </div>
+            {community.isPrivate && (
+              <div className="flex items-center gap-3 text-sm">
+                <Lock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-foreground">Private community</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Pricing */}
+        <div className="rounded-xl border border-border bg-card p-5">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Membership
+          </h2>
+          <span className="inline-flex items-center rounded-full border border-border bg-muted px-3 py-1 text-sm font-medium text-foreground">
+            {getPricingLabel(community.pricingModel, community.pricing)}
+          </span>
+          {community.pricing && (
+            <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+              {community.pricing.monthlyPrice && (
+                <p>
+                  <span className="font-semibold text-foreground">
+                    ${community.pricing.monthlyPrice}
+                  </span>{' '}
+                  / month
+                </p>
+              )}
+              {community.pricing.yearlyPrice && (
+                <p>
+                  <span className="font-semibold text-foreground">
+                    ${community.pricing.yearlyPrice}
+                  </span>{' '}
+                  / year
+                </p>
+              )}
+              {community.pricing.oneTimePrice && (
+                <p>
+                  <span className="font-semibold text-foreground">
+                    ${community.pricing.oneTimePrice}
+                  </span>{' '}
+                  one-time
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Description */}
+      {community.description && (
+        <div className="rounded-xl border border-border bg-card p-5">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            About
+          </h2>
+          <p className="leading-relaxed text-foreground/90">{community.description}</p>
+        </div>
+      )}
+
+      <JoinModal open={joinOpen} onOpenChange={setJoinOpen} community={community} />
+      <UpgradeModal open={upgradeOpen} onOpenChange={setUpgradeOpen} community={community} />
+    </div>
+  )
+}

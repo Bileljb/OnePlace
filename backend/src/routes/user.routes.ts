@@ -1,26 +1,11 @@
-import {Router, type Request, type Response} from 'express';
+import { Router } from "express";
+import { protect } from "../middlewares/auth.middleware.js";
+import { getMe, updateMe, getMyCommunities } from "../controllers/user.controller.js";
 
 const userRouter = Router();
 
-userRouter.get('/', (req: Request, res: Response) => {
-  res.send('Get all users');
-});
-
-userRouter.get('/:id', (req: Request, res: Response) => {
-  res.send('Get user by ID');
-});
-
-userRouter.post('/:id', (req: Request, res: Response) => {
-  res.send('Create a new user');
-});
-
-userRouter.put('/:id', (req: Request, res: Response) => {
-  res.send('Update user by ID');
-});
-
-userRouter.delete('/:id', (req: Request, res: Response) => {
-  res.send('Delete user by ID');
-});
-
+userRouter.get("/me", protect, getMe);
+userRouter.put("/me", protect, updateMe);
+userRouter.get("/me/communities", protect, getMyCommunities);
 
 export default userRouter;

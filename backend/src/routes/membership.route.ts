@@ -1,24 +1,26 @@
-import {Router, type Request, type Response} from "express"
-const membershipRouter = Router()
+import { Router } from "express";
+import { protect } from "../middlewares/auth.middleware.js";
+import {
+  getMyMemberships,
+  getUpcomingRenewals,
+  getMembershipById,
+  getCommunityMembers,
+  exportCommunityMembers,
+  banMember,
+  unbanMember,
+  setMemberRole,
+} from "../controllers/membership.controller.js";
 
-membershipRouter.get("/", (req: Request, res: Response)=>res.send("Get all memberships"))
+const membershipRouter = Router();
 
-membershipRouter.get("/:id", (req: Request, res: Response)=>res.send("Get membership by ID"))
-
-membershipRouter.post("/", (req: Request, res: Response)=>res.send("Create a new membership"))
-
-membershipRouter.put("/:id", (req: Request, res: Response)=>res.send("Update membership by ID"))
-
-
-membershipRouter.delete("/:id", (req: Request, res: Response)=>res.send("Delete membership by ID"))
-
-membershipRouter.get("/user/:id", (req: Request, res: Response)=>res.send("Get memberships for a user"))
-
-membershipRouter.put("/:id/cancel", (req: Request, res: Response)=>res.send("Cancel a membership"))
-
-membershipRouter.get("/upcoming-renewal", (req: Request, res: Response)=>res.send("get upcoming renewals"))
-
-
-
+// Specific named routes must come before /:id to avoid param conflicts
+membershipRouter.get("/me", protect, getMyMemberships);
+membershipRouter.get("/upcoming", protect, getUpcomingRenewals);
+membershipRouter.get("/community/:communityId", protect, getCommunityMembers);
+membershipRouter.get("/community/:communityId/export", protect, exportCommunityMembers);
+membershipRouter.put("/community/:communityId/members/:userId/ban", protect, banMember);
+membershipRouter.put("/community/:communityId/members/:userId/unban", protect, unbanMember);
+membershipRouter.put("/community/:communityId/members/:userId/role", protect, setMemberRole);
+membershipRouter.get("/:id", protect, getMembershipById);
 
 export default membershipRouter;
