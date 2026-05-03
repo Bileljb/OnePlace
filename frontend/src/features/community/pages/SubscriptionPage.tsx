@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { communityApi } from '@/api/community'
 import { Button } from '@/components/ui/button'
+import { ConfirmModal } from '@/components/ui/confirm-modal'
 import type { BillingInterval } from '@/types/community'
 
 const STATUS_STYLES: Record<string, string> = {
@@ -35,31 +37,25 @@ export function SubscriptionPage() {
 
   const details = data?.data
 
-  const {
-    mutate: renew,
-    isPending: isRenewing,
-    isSuccess: renewSuccess,
-    error: renewError,
-  } = useMutation({
+  const { mutate: renew, isPending: isRenewing } = useMutation({
     mutationFn: (billingInterval?: BillingInterval) =>
       communityApi.renew(id!, billingInterval),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subscription', id] })
       queryClient.invalidateQueries({ queryKey: ['membership', id] })
+      toast.success('Subscription renewed')
     },
+    onError: (err) => toast.error((err as Error).message),
   })
 
-  const {
-    mutate: leave,
-    isPending: isLeaving,
-    error: leaveError,
-  } = useMutation({
+  const { mutate: leave, isPending: isLeaving } = useMutation({
     mutationFn: () => communityApi.leave(id!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-communities'] })
       queryClient.invalidateQueries({ queryKey: ['membership', id] })
       navigate('/profile/communities')
     },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   if (isLoading) {
@@ -165,12 +161,6 @@ export function SubscriptionPage() {
 
           {canRenew && (
             <div className="border-t border-border pt-4 space-y-2">
-              {renewError && (
-                <p className="text-sm text-destructive">{(renewError as Error).message}</p>
-              )}
-              {renewSuccess && (
-                <p className="text-sm text-emerald-600">Subscription renewed successfully.</p>
-              )}
               <Button
                 onClick={() =>
                   renew(subscription.billingInterval as BillingInterval | undefined)
@@ -199,39 +189,24 @@ export function SubscriptionPage() {
           </p>
         </div>
 
-        {leaveError && (
-          <p className="text-sm text-destructive">{(leaveError as Error).message}</p>
-        )}
-
-        {confirmLeave ? (
-          <div className="flex gap-3">
-            <Button
-              variant="destructive"
-              onClick={() => leave()}
-              disabled={isLeaving}
-              className="flex-1"
-            >
-              {isLeaving ? 'Leaving...' : 'Yes, leave community'}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setConfirmLeave(false)}
-              disabled={isLeaving}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-          </div>
-        ) : (
-          <Button
-            variant="outline"
-            onClick={() => setConfirmLeave(true)}
-            className="border-destructive/30 text-destructive hover:bg-destructive/5 hover:text-destructive"
-          >
-            Leave community
-          </Button>
-        )}
+        <Button
+          variant="outline"
+          onClick={() => setConfirmLeave(true)}
+          className="border-destructive/30 text-destructive hover:bg-destructive/5 hover:text-destructive"
+        >
+          Leave community
+        </Button>
       </div>
+
+      <ConfirmModal
+        open={confirmLeave}
+        onOpenChange={setConfirmLeave}
+        title="Leave community?"
+        description="You will lose access immediately. This cannot be undone."
+        confirmLabel="Leave community"
+        onConfirm={() => leave()}
+        isPending={isLeaving}
+      />
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { courseApi } from '@/api/course'
 import type { CourseSection } from '@/types/course'
 import {
@@ -45,9 +46,10 @@ export function SectionModal({
         : courseApi.createSection(communityId, courseId, { title: title.trim() }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['course', communityId, courseId] })
+      toast.success(section ? 'Section renamed' : 'Section added')
       onOpenChange(false)
     },
-    onError: (err) => setError((err as Error).message),
+    onError: (err) => toast.error((err as Error).message),
   })
 
   function handleSubmit(e: React.FormEvent) {

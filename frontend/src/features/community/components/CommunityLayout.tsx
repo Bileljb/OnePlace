@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, Navigate, Outlet, Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronLeft } from 'lucide-react'
@@ -11,6 +11,7 @@ import { formatCount, getGradient, getPricingLabel } from '../utils/community.ut
 import type { CommunityDetail } from '@/types/community'
 import { JoinModal } from './JoinModal'
 import { UpgradeModal } from './UpgradeModal'
+import { NotificationBell } from '@/components/shared/NotificationBell'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -123,11 +124,15 @@ function CommunitySidebar({ community }: { community: CommunityDetail }) {
       {/* Avatar + name */}
       <div className="mb-4 flex items-center gap-3">
         <div
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${gradient}`}
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg overflow-hidden ${community.iconUrl ? '' : `bg-gradient-to-br ${gradient}`}`}
         >
-          <span className="text-sm font-bold text-white">
-            {community.name.slice(0, 2).toUpperCase()}
-          </span>
+          {community.iconUrl ? (
+            <img src={community.iconUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span className="text-sm font-bold text-white">
+              {community.name.slice(0, 2).toUpperCase()}
+            </span>
+          )}
         </div>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-foreground">{community.name}</p>
@@ -216,6 +221,12 @@ export function CommunityLayout() {
 
   const community: CommunityDetail | undefined = mockCommunity ?? data?.data?.community
 
+  useEffect(() => {
+    if (community && id) {
+      localStorage.setItem('lastCommunityId', id)
+    }
+  }, [community, id])
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -246,14 +257,19 @@ export function CommunityLayout() {
               <div className="h-5 w-px shrink-0 bg-border" />
               <span className="truncate font-semibold text-foreground">{community.name}</span>
             </div>
-            <UserMenu />
+            <div className="flex items-center gap-1">
+              <NotificationBell />
+              <UserMenu />
+            </div>
           </div>
 
           {/* Tabs row */}
           <div className="-mb-px flex overflow-x-auto">
             <NavTab to={`/communities/${id}/community`}>Community</NavTab>
             <NavTab to={`/communities/${id}/classroom`}>Classroom</NavTab>
+            <NavTab to={`/communities/${id}/calendar`}>Calendar</NavTab>
             <NavTab to={`/communities/${id}/members`}>Members</NavTab>
+            <NavTab to={`/communities/${id}/leaderboards`}>Leaderboards</NavTab>
             <NavTab to={`/communities/${id}/about`}>About</NavTab>
             {canViewAnalytics && (
               <NavTab to={`/communities/${id}/analytics`}>Analytics</NavTab>

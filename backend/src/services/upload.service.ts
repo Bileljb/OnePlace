@@ -50,7 +50,7 @@ function getS3Client() {
   });
 }
 
-export type UploadFolder = "courses" | "lessons" | "attachments" | "posts";
+export type UploadFolder = "courses" | "lessons" | "attachments" | "posts" | "communities";
 
 export async function createPresignedUpload(input: {
   filename: string;

@@ -27,7 +27,7 @@ export const communityApi = {
       .post<ApiResponse<{ community: CommunityDetail; redirectTo: string }>>('/communities', data)
       .then((r) => r.data),
 
-  update: (id: string, data: { name?: string; description?: string; isPrivate?: boolean }) =>
+  update: (id: string, data: { name?: string; description?: string; isPrivate?: boolean; coverUrl?: string | null; iconUrl?: string | null }) =>
     api
       .put<ApiResponse<{ community: CommunityDetail }>>(`/communities/${id}`, data)
       .then((r) => r.data),

@@ -98,12 +98,12 @@
 
 - [x] Video player — supports embed URLs (YouTube/Vimeo/Loom/Wistia) + direct upload URLs
 - [x] Rich text renderer — renders stored HTML/JSON lesson content
-- [ ] File uploader — drag-and-drop or select → presign → PUT to S3/R2 → return CDN URL
+- [x] File uploader — drag-and-drop or select → presign → PUT to S3/R2 → return CDN URL
 - [x] Progress bar — used on course cards and course page header
 - [x] Access type badge — OPEN / BUY_NOW / TIME_UNLOCK / PRIVATE
 - [x] Pricing model badge — FREE / FREEMIUM / SUBSCRIPTION / ONE_TIME
-- [ ] Toast notifications — success, error, info
-- [ ] Confirmation modal — delete post, delete course, leave community, ban member
+- [x] Toast notifications — success, error, info
+- [x] Confirmation modal — delete post, delete course, leave community, ban member
 
 ---
 

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { ChevronLeft } from 'lucide-react'
 import { communityApi } from '@/api/community'
 import type { PlatformPlan } from '@/types/community'
@@ -33,6 +34,7 @@ export function CreateCommunity() {
       const communityId = res.data?.community.id
       if (communityId) navigate(`/communities/${communityId}/about`)
     },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   function handleSubmit(e: React.FormEvent) {

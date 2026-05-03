@@ -3,15 +3,34 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Trash2, MessageSquare, Pin, Image, Video, FileText, Send } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import { toast } from 'sonner'
 import { postApi } from '@/api/post'
 import { useAuthStore } from '@/store/auth.store'
 import type { Comment } from '@/types/post'
 import { Button } from '@/components/ui/button'
+import { ConfirmModal } from '@/components/ui/confirm-modal'
 
 const TYPE_ICON = {
   TEXT: FileText,
   IMAGE: Image,
   VIDEO: Video,
+}
+
+interface PollData {
+  options: string[]
+  text?: string
+  mediaUrl?: string
+  mediaType?: 'image' | 'video'
+}
+
+function parsePoll(content: string): PollData | null {
+  try {
+    const data = JSON.parse(content)
+    if (data?.poll === true && Array.isArray(data.options)) return data as PollData
+    return null
+  } catch {
+    return null
+  }
 }
 
 // ─── CommentItem ──────────────────────────────────────────────────────────────
@@ -28,40 +47,56 @@ function CommentItem({
   canDelete: boolean
 }) {
   const queryClient = useQueryClient()
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
-  const { mutate: deleteComment } = useMutation({
+  const { mutate: deleteComment, isPending: deleting } = useMutation({
     mutationFn: () => postApi.deleteComment(communityId, postId, comment.id),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['comments', postId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['comments', postId] })
+      toast.success('Comment deleted')
+      setConfirmDelete(false)
+    },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   const initials = `${comment.author.firstname[0]}${comment.author.lastname[0]}`.toUpperCase()
 
   return (
-    <div className="group flex gap-3">
-      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-        {initials}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium text-foreground">
-            {comment.author.firstname} {comment.author.lastname}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
-          </span>
+    <>
+      <div className="group flex gap-3">
+        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+          {initials}
         </div>
-        <p className="mt-0.5 text-sm leading-relaxed text-foreground/90">{comment.content}</p>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <span className="text-sm font-medium text-foreground">
+              {comment.author.firstname} {comment.author.lastname}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
+            </span>
+          </div>
+          <p className="mt-0.5 text-sm leading-relaxed text-foreground/90">{comment.content}</p>
+        </div>
+        {canDelete && (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="mt-0.5 shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-all hover:text-destructive group-hover:opacity-100"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
-      {canDelete && (
-        <button
-          onClick={() => deleteComment()}
-          className="mt-0.5 shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-all hover:text-destructive group-hover:opacity-100"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      )}
-    </div>
+      <ConfirmModal
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Delete comment?"
+        description="This comment will be permanently deleted."
+        confirmLabel="Delete"
+        onConfirm={() => deleteComment()}
+        isPending={deleting}
+      />
+    </>
   )
 }
 
@@ -74,6 +109,8 @@ export function PostDetail() {
   const { user } = useAuthStore()
   const queryClient = useQueryClient()
   const [commentText, setCommentText] = useState('')
+  const [confirmDeletePost, setConfirmDeletePost] = useState(false)
+  const [selectedPollOption, setSelectedPollOption] = useState<number | null>(null)
 
   const { data: postData, isLoading: postLoading } = useQuery({
     queryKey: ['post', postId],
@@ -87,12 +124,14 @@ export function PostDetail() {
     enabled: !!communityId && !!postId,
   })
 
-  const { mutate: deletePost } = useMutation({
+  const { mutate: deletePost, isPending: deletingPost } = useMutation({
     mutationFn: () => postApi.delete(communityId!, postId!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['posts', communityId] })
+      toast.success('Post deleted')
       navigate(`/communities/${communityId}/community`)
     },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   const { mutate: addComment, isPending: commenting } = useMutation({
@@ -159,7 +198,7 @@ export function PostDetail() {
             {post.isPinned && <Pin className="h-3.5 w-3.5 text-primary" />}
             {canDeletePost && (
               <button
-                onClick={() => deletePost()}
+                onClick={() => setConfirmDeletePost(true)}
                 className="rounded p-1 text-muted-foreground transition-colors hover:text-destructive"
               >
                 <Trash2 className="h-4 w-4" />
@@ -170,7 +209,47 @@ export function PostDetail() {
 
         {/* Title + content */}
         <h1 className="mb-3 text-xl font-bold text-foreground">{post.title}</h1>
-        <p className="leading-relaxed text-foreground/90 whitespace-pre-wrap">{post.content}</p>
+        {(() => {
+          const poll = parsePoll(post.content)
+          if (poll) {
+            return (
+              <div className="space-y-3">
+                {poll.text && (
+                  <p className="leading-relaxed text-foreground/90 whitespace-pre-wrap">{poll.text}</p>
+                )}
+                {poll.mediaUrl && poll.mediaType === 'image' && (
+                  <img src={poll.mediaUrl} alt={post.title} className="w-full rounded-lg object-cover" />
+                )}
+                {poll.mediaUrl && poll.mediaType === 'video' && (
+                  <video src={poll.mediaUrl} controls className="w-full rounded-lg" />
+                )}
+                <div className="space-y-2">
+                  {poll.options.map((opt, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setSelectedPollOption(i === selectedPollOption ? null : i)}
+                      className={`w-full rounded-lg border px-4 py-2.5 text-left text-sm transition-colors ${
+                        selectedPollOption === i
+                          ? 'border-primary bg-primary/10 font-medium text-primary'
+                          : 'border-border text-foreground hover:border-primary/40 hover:bg-muted/40'
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          }
+          if (post.type === 'IMAGE') {
+            return <img src={post.content} alt={post.title} className="w-full rounded-lg object-cover" />
+          }
+          if (post.type === 'VIDEO') {
+            return <video src={post.content} controls className="w-full rounded-lg" />
+          }
+          return <p className="leading-relaxed text-foreground/90 whitespace-pre-wrap">{post.content}</p>
+        })()}
 
         {/* Meta */}
         <div className="mt-4 flex items-center gap-3 border-t border-border pt-4">
@@ -250,6 +329,16 @@ export function PostDetail() {
           </>
         )}
       </div>
+
+      <ConfirmModal
+        open={confirmDeletePost}
+        onOpenChange={setConfirmDeletePost}
+        title="Delete post?"
+        description="This post and all its comments will be permanently deleted."
+        confirmLabel="Delete"
+        onConfirm={() => deletePost()}
+        isPending={deletingPost}
+      />
     </div>
   )
 }

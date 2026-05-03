@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import {
   ArrowLeft,
   CheckCircle,
@@ -176,12 +177,14 @@ function LessonView({
 
   const { mutate: markComplete, isPending: completing } = useMutation({
     mutationFn: () => courseApi.markComplete(communityId, courseId, sectionId, lesson.id),
-    onSuccess: invalidate,
+    onSuccess: () => { invalidate(); toast.success('Lesson completed!') },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   const { mutate: markIncomplete, isPending: uncompleting } = useMutation({
     mutationFn: () => courseApi.markIncomplete(communityId, courseId, sectionId, lesson.id),
-    onSuccess: invalidate,
+    onSuccess: () => { invalidate(); toast.success('Marked as incomplete') },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   return (

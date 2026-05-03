@@ -1,7 +1,7 @@
 import { api } from './client'
 import type { ApiResponse } from '@/types/auth'
 
-type UploadFolder = 'courses' | 'lessons' | 'attachments' | 'posts'
+export type UploadFolder = 'courses' | 'lessons' | 'attachments' | 'posts' | 'communities'
 
 export const uploadApi = {
   presign: (data: { filename: string; contentType: string; folder: UploadFolder }) =>
@@ -11,15 +11,16 @@ export const uploadApi = {
 }
 
 export async function uploadFile(file: File, folder: UploadFolder = 'courses'): Promise<string> {
-  const { data } = await uploadApi.presign({
+  const result = await uploadApi.presign({
     filename: file.name,
     contentType: file.type,
     folder,
   })
-  await fetch(data.uploadUrl, {
+  if (!result.data) throw new Error('Failed to get presigned URL')
+  await fetch(result.data.uploadUrl, {
     method: 'PUT',
     body: file,
     headers: { 'Content-Type': file.type },
   })
-  return data.fileUrl
+  return result.data.fileUrl
 }

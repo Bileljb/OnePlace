@@ -32,6 +32,8 @@ export interface CommunityListItem {
   id: string
   name: string
   description: string | null
+  coverUrl: string | null
+  iconUrl: string | null
   pricingModel: PricingModel
   platformPlan: PlatformPlan
   createdAt: string
@@ -43,6 +45,8 @@ export interface CommunityDetail {
   id: string
   name: string
   description: string | null
+  coverUrl: string | null
+  iconUrl: string | null
   pricingModel: PricingModel
   platformPlan: PlatformPlan
   isPrivate: boolean

@@ -12,6 +12,7 @@
 
 import { prisma } from "../database/db.js";
 import { sendExpiryReminderEmail } from "../utils/email.utils.js";
+import { createNotification } from "../services/notification.service.js";
 
 const INTERVAL_MS = 60 * 60 * 1000; // run every hour
 
@@ -37,6 +38,8 @@ async function sendExpiryReminders(now: Date): Promise<void> {
       },
     },
     select: {
+      userId: true,
+      communityId: true,
       community: { select: { name: true } },
       user: { select: { email: true, firstname: true } },
       subscriptions: {
@@ -54,6 +57,13 @@ async function sendExpiryReminders(now: Date): Promise<void> {
     sendExpiryReminderEmail(m.user.email, m.user.firstname, m.community.name, expiryDate).catch(
       (err) => console.error("[expiry-job] Failed to send reminder email:", err)
     );
+    createNotification({
+      userId: m.userId,
+      type: "SUBSCRIPTION_EXPIRING",
+      title: "Subscription expiring soon",
+      body: `Your subscription to ${m.community.name} expires in 3 days`,
+      link: `/communities/${m.communityId}/subscription`,
+    }).catch(() => {});
   }
 
   if (upcoming.length > 0) {
@@ -74,6 +84,9 @@ export async function runExpiryJob(): Promise<void> {
     },
     select: {
       id: true,
+      userId: true,
+      communityId: true,
+      community: { select: { name: true } },
       subscriptions: {
         orderBy: { createdAt: "desc" },
         take: 1,
@@ -85,15 +98,14 @@ export async function runExpiryJob(): Promise<void> {
     },
   });
 
-  const toExpireIds = activeMemberships
-    .filter(({ subscriptions }) => {
-      const latest = subscriptions[0];
-      // No successful subscription at all, or the latest one has passed its end date
-      if (!latest || latest.paymentStatus !== "SUCCESS") return true;
-      if (latest.subscriptionEnd && latest.subscriptionEnd < now) return true;
-      return false;
-    })
-    .map(({ id }) => id);
+  const toExpire = activeMemberships.filter(({ subscriptions }) => {
+    const latest = subscriptions[0];
+    if (!latest || latest.paymentStatus !== "SUCCESS") return true;
+    if (latest.subscriptionEnd && latest.subscriptionEnd < now) return true;
+    return false;
+  });
+
+  const toExpireIds = toExpire.map(({ id }) => id);
 
   await sendExpiryReminders(now);
 
@@ -103,6 +115,17 @@ export async function runExpiryJob(): Promise<void> {
     where: { id: { in: toExpireIds } },
     data: { status: "EXPIRED" },
   });
+
+  // In-app notification for each expired member
+  for (const m of toExpire) {
+    createNotification({
+      userId: m.userId,
+      type: "SUBSCRIPTION_EXPIRED",
+      title: "Subscription expired",
+      body: `Your subscription to ${m.community.name} has expired`,
+      link: `/communities/${m.communityId}/subscription`,
+    }).catch(() => {});
+  }
 
   console.log(`[expiry-job] Marked ${toExpireIds.length} membership(s) as EXPIRED`);
 }

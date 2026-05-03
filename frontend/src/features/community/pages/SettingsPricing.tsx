@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { communityApi } from '@/api/community'
 import type { PricingModel } from '@/types/community'
 import { Button } from '@/components/ui/button'
@@ -51,12 +52,16 @@ export function SettingsPricing() {
     }
   }, [community, pricing])
 
-  const { mutate: saveModel, isPending: savingModel, error: modelError, isSuccess: modelSaved } = useMutation({
+  const { mutate: saveModel, isPending: savingModel } = useMutation({
     mutationFn: () => communityApi.changePricingModel(id!, model),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['community', id] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['community', id] })
+      toast.success('Pricing model updated')
+    },
+    onError: (err) => toast.error((err as Error).message),
   })
 
-  const { mutate: savePrices, isPending: savingPrices, error: priceError, isSuccess: pricesSaved } = useMutation({
+  const { mutate: savePrices, isPending: savingPrices } = useMutation({
     mutationFn: () =>
       communityApi.configurePricing(id!, {
         ...(monthlyPrice && { monthlyPrice: parseFloat(monthlyPrice) }),
@@ -64,7 +69,11 @@ export function SettingsPricing() {
         ...(oneTimePrice && { oneTimePrice: parseFloat(oneTimePrice) }),
         ...(upgradePrice && { upgradePrice: parseFloat(upgradePrice) }),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['community', id] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['community', id] })
+      toast.success('Prices saved')
+    },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   const showSubscription = model === 'SUBSCRIPTION'
@@ -99,9 +108,6 @@ export function SettingsPricing() {
             </button>
           ))}
         </div>
-
-        {modelError && <p className="text-sm text-destructive">{(modelError as Error).message}</p>}
-        {modelSaved && <p className="text-sm text-emerald-600">Pricing model updated.</p>}
 
         <div className="flex justify-end">
           <Button
@@ -178,9 +184,6 @@ export function SettingsPricing() {
               <p className="text-xs text-muted-foreground">One-time fee for free-tier members to unlock premium content.</p>
             </div>
           )}
-
-          {priceError && <p className="text-sm text-destructive">{(priceError as Error).message}</p>}
-          {pricesSaved && <p className="text-sm text-emerald-600">Prices saved.</p>}
 
           <div className="flex justify-end">
             <Button onClick={() => savePrices()} disabled={savingPrices} size="sm">

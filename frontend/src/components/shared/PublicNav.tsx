@@ -17,15 +17,15 @@ export function PublicNav() {
 
         <div className="flex items-center gap-2">
           {user ? (
-            <Link to="/communities">
-              <Button size="sm">Go to app</Button>
+            <Link to="/profile">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
+                {user.firstname[0]}{user.lastname[0]}
+              </div>
             </Link>
           ) : (
             <>
               <Link to="/sign-in">
-                <Button variant="ghost" size="sm">
-                  Log in
-                </Button>
+                <Button variant="ghost" size="sm">Log in</Button>
               </Link>
               <Link to="/sign-up">
                 <Button size="sm">Sign up</Button>

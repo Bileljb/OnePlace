@@ -6,6 +6,8 @@ export const MOCK_COMMUNITIES: CommunityListItem[] = [
     name: 'AI Builders Club',
     description:
       'The go-to community for developers and founders who want to ship AI-powered products faster. Weekly teardowns, live builds, and a tight-knit group of builders.',
+    coverUrl: null,
+    iconUrl: null,
     pricingModel: 'SUBSCRIPTION',
     platformPlan: 'PRO',
     createdAt: '2024-01-10T00:00:00Z',
@@ -17,6 +19,8 @@ export const MOCK_COMMUNITIES: CommunityListItem[] = [
     name: 'Design Systems Mastery',
     description:
       'Learn how to build and maintain design systems at scale. Figma workflows, token architecture, component libraries, and everything in between.',
+    coverUrl: null,
+    iconUrl: null,
     pricingModel: 'FREE',
     platformPlan: 'BASIC',
     createdAt: '2024-02-05T00:00:00Z',
@@ -28,6 +32,8 @@ export const MOCK_COMMUNITIES: CommunityListItem[] = [
     name: 'Indie Hackers Network',
     description:
       'Bootstrap founders sharing revenue numbers, growth tactics, and hard-won lessons. Free tier gets you the feed. Premium unlocks the full course library.',
+    coverUrl: null,
+    iconUrl: null,
     pricingModel: 'FREEMIUM',
     platformPlan: 'PRO',
     createdAt: '2024-03-12T00:00:00Z',
@@ -39,6 +45,8 @@ export const MOCK_COMMUNITIES: CommunityListItem[] = [
     name: 'Spanish Fluency Lab',
     description:
       'Structured immersion for busy adults. Daily micro-lessons, conversation practice sessions, and a supportive community to keep you accountable.',
+    coverUrl: null,
+    iconUrl: null,
     pricingModel: 'SUBSCRIPTION',
     platformPlan: 'PRO',
     createdAt: '2024-04-01T00:00:00Z',
@@ -50,6 +58,8 @@ export const MOCK_COMMUNITIES: CommunityListItem[] = [
     name: 'TypeScript Deep Dive',
     description:
       'From advanced generics to compiler internals. One payment, lifetime access to all courses, challenges, and future updates.',
+    coverUrl: null,
+    iconUrl: null,
     pricingModel: 'ONE_TIME',
     platformPlan: 'PRO',
     createdAt: '2024-04-20T00:00:00Z',
@@ -61,6 +71,8 @@ export const MOCK_COMMUNITIES: CommunityListItem[] = [
     name: 'Fitness & Biohacking',
     description:
       'Evidence-based protocols for performance, longevity, and recovery. Open for everyone — no gimmicks, just what the research actually says.',
+    coverUrl: null,
+    iconUrl: null,
     pricingModel: 'FREE',
     platformPlan: 'BASIC',
     createdAt: '2024-05-08T00:00:00Z',

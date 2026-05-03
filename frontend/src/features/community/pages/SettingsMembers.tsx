@@ -1,12 +1,15 @@
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Download, Shield, ShieldOff, UserMinus, UserPlus } from 'lucide-react'
+import { toast } from 'sonner'
 import { formatDistanceToNow } from 'date-fns'
 import { membershipApi } from '@/api/membership'
 import { useAuthStore } from '@/store/auth.store'
 import { communityApi } from '@/api/community'
 import type { CommunityMember } from '@/types/membership'
 import { Button } from '@/components/ui/button'
+import { ConfirmModal } from '@/components/ui/confirm-modal'
 
 // ─── Status/Role badges ───────────────────────────────────────────────────────
 
@@ -51,24 +54,29 @@ function MemberRow({
   isAdmin: boolean
 }) {
   const queryClient = useQueryClient()
+  const [confirmBan, setConfirmBan] = useState(false)
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ['community-members', communityId] })
 
   const { mutate: ban, isPending: banning } = useMutation({
     mutationFn: () => membershipApi.ban(communityId, member.userId),
-    onSuccess: invalidate,
+    onSuccess: () => { invalidate(); toast.success(`${member.user.firstname} banned`) },
+    onError: (err) => toast.error((err as Error).message),
   })
   const { mutate: unban, isPending: unbanning } = useMutation({
     mutationFn: () => membershipApi.unban(communityId, member.userId),
-    onSuccess: invalidate,
+    onSuccess: () => { invalidate(); toast.success(`${member.user.firstname} unbanned`) },
+    onError: (err) => toast.error((err as Error).message),
   })
   const { mutate: promote, isPending: promoting } = useMutation({
     mutationFn: () => membershipApi.setRole(communityId, member.userId, 'admin'),
-    onSuccess: invalidate,
+    onSuccess: () => { invalidate(); toast.success(`${member.user.firstname} promoted to admin`) },
+    onError: (err) => toast.error((err as Error).message),
   })
   const { mutate: demote, isPending: demoting } = useMutation({
     mutationFn: () => membershipApi.setRole(communityId, member.userId, 'member'),
-    onSuccess: invalidate,
+    onSuccess: () => { invalidate(); toast.success(`${member.user.firstname} demoted to member`) },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   const latestSub = member.subscriptions[0] ?? null
@@ -76,6 +84,7 @@ function MemberRow({
   const canChangeRole = isCreator && member.role !== 'creator'
 
   return (
+    <>
     <tr className="border-b border-border last:border-0">
       {/* Name + email */}
       <td className="py-3 pr-4">
@@ -125,7 +134,7 @@ function MemberRow({
         <div className="flex items-center gap-1">
           {canBan && member.status !== 'BANNED' && (
             <button
-              onClick={() => ban()}
+              onClick={() => setConfirmBan(true)}
               disabled={banning}
               title="Ban member"
               className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
@@ -166,6 +175,16 @@ function MemberRow({
         </div>
       </td>
     </tr>
+    <ConfirmModal
+      open={confirmBan}
+      onOpenChange={setConfirmBan}
+      title="Ban member?"
+      description={`${member.user.firstname} ${member.user.lastname} will be banned and lose access to this community.`}
+      confirmLabel="Ban"
+      onConfirm={() => ban()}
+      isPending={banning}
+    />
+    </>
   )
 }
 

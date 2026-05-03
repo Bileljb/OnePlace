@@ -1,6 +1,7 @@
 import { prisma } from "../database/db.js";
 import { AppError } from "../utils/AppError.js";
 import type { AttachmentType, CourseAccessType } from "@prisma/client";
+import { addPoints } from "./points.service.js";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -426,14 +427,29 @@ export async function deleteAttachment(attachmentId: string, requesterId: string
 // ─── Mark Lesson Complete / Incomplete ────────────────────────────────────────
 
 export async function markLessonComplete(lessonId: string, userId: string) {
-  const lesson = await prisma.lesson.findUnique({ where: { id: lessonId } });
+  const lesson = await prisma.lesson.findUnique({
+    where: { id: lessonId },
+    include: { section: { include: { course: { select: { communityId: true } } } } },
+  });
   if (!lesson) throw new AppError("Lesson not found", 404);
 
-  return prisma.lessonProgress.upsert({
+  const existing = await prisma.lessonProgress.findUnique({
+    where: { userId_lessonId: { userId, lessonId } },
+  });
+  const alreadyCompleted = !!existing?.completedAt;
+
+  const result = await prisma.lessonProgress.upsert({
     where: { userId_lessonId: { userId, lessonId } },
     create: { userId, lessonId, completedAt: new Date() },
     update: { completedAt: new Date() },
   });
+
+  // Award XP only on first completion
+  if (!alreadyCompleted) {
+    addPoints(userId, lesson.section.course.communityId, "LESSON_COMPLETED").catch(() => {});
+  }
+
+  return result;
 }
 
 export async function markLessonIncomplete(lessonId: string, userId: string) {

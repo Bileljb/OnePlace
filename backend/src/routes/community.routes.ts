@@ -2,6 +2,7 @@ import { Router } from "express";
 import { protect } from "../middlewares/auth.middleware.js";
 import { checkCommunityAccess } from "../middlewares/access.middleware.js";
 import courseRouter from "./course.routes.js";
+import eventRouter from "./event.routes.js";
 import {
   createPost,
   getPostById,
@@ -27,6 +28,7 @@ import {
   getCommunityPosts,
 } from "../controllers/community.controller.js";
 import { getCommunityAnalytics } from "../controllers/analytics.controller.js";
+import { getCommunityLeaderboard } from "../controllers/leaderboard.controller.js";
 
 const communityRouter = Router();
 
@@ -72,7 +74,10 @@ postRouter.get("/:postId/comments", protect, checkCommunityAccess, getPostCommen
 postRouter.post("/:postId/comments", protect, checkCommunityAccess, createComment);
 postRouter.delete("/:postId/comments/:commentId", protect, deleteComment);
 
+communityRouter.get("/:communityId/leaderboard", protect, checkCommunityAccess, getCommunityLeaderboard);
+
 communityRouter.use("/:communityId/posts", postRouter);
 communityRouter.use("/:communityId/courses", courseRouter);
+communityRouter.use("/:communityId/events", eventRouter);
 
 export default communityRouter;

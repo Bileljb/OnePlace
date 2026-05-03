@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { communityApi } from '@/api/community'
 import type { CommunityDetail } from '@/types/community'
 import {
@@ -21,13 +22,15 @@ export function UpgradeModal({ open, onOpenChange, community }: UpgradeModalProp
   const queryClient = useQueryClient()
   const navigate = useNavigate()
 
-  const { mutate: upgrade, isPending, error } = useMutation({
+  const { mutate: upgrade, isPending } = useMutation({
     mutationFn: () => communityApi.upgrade(community.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['membership', community.id] })
+      toast.success('Membership upgraded!')
       onOpenChange(false)
       navigate(`/communities/${community.id}/classroom`)
     },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   const upgradePrice = community.pricing?.upgradePrice
@@ -50,12 +53,6 @@ export function UpgradeModal({ open, onOpenChange, community }: UpgradeModalProp
               Full access to all premium content. No recurring charges.
             </p>
           </div>
-        )}
-
-        {error && (
-          <p className="mb-3 text-sm text-destructive">
-            {(error as Error).message ?? 'Something went wrong. Please try again.'}
-          </p>
         )}
 
         <Button onClick={() => upgrade()} disabled={isPending} className="w-full">

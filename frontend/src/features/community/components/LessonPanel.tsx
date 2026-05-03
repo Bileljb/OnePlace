@@ -1,7 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, Link2, Loader2, Plus, Trash2, Video } from 'lucide-react'
+import {
+  ChevronDown,
+  FileText,
+  Link2,
+  Loader2,
+  Paperclip,
+  Pin,
+  Trash2,
+} from 'lucide-react'
+import { toast } from 'sonner'
 import { courseApi } from '@/api/course'
+import { uploadFile } from '@/api/upload'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { TiptapEditor } from '@/components/shared/TiptapEditor'
@@ -44,21 +54,32 @@ export function LessonPanel({
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [videoUrl, setVideoUrl] = useState('')
-  const [isPublished, setIsPublished] = useState(false)
+  const [transcript, setTranscript] = useState('')
+  const [isPublished, setIsPublished] = useState(true)
   const [attachments, setAttachments] = useState<LessonAttachment[]>([])
   const [error, setError] = useState('')
+  const [editorKey, setEditorKey] = useState<string>(lessonId ?? 'new')
 
   // ADD dropdown panels
-  const [showVideoField, setShowVideoField] = useState(false)
   const [showLinkField, setShowLinkField] = useState(false)
+  const [showTranscriptField, setShowTranscriptField] = useState(false)
   const [linkName, setLinkName] = useState('')
   const [linkUrl, setLinkUrl] = useState('')
 
+  const resourceFileInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     if (isNew) {
-      setTitle(''); setContent(''); setVideoUrl('')
-      setIsPublished(false); setError('')
-      setAttachments([]); setShowVideoField(false); setShowLinkField(false)
+      setTitle('')
+      setContent('')
+      setVideoUrl('')
+      setTranscript('')
+      setIsPublished(true)
+      setError('')
+      setAttachments([])
+      setShowLinkField(false)
+      setShowTranscriptField(false)
+      setEditorKey('new')
     }
   }, [isNew])
 
@@ -67,9 +88,14 @@ export function LessonPanel({
       setTitle(lesson.title)
       setContent(lesson.content ?? '')
       setVideoUrl(lesson.videoUrl ?? '')
+      setTranscript(lesson.transcript ?? '')
       setIsPublished(lesson.isPublished)
       setAttachments(lesson.attachments)
       setError('')
+      if (lesson.transcript) setShowTranscriptField(true)
+      // Update editorKey in the same effect so React batches it with setContent —
+      // TiptapEditor's resetKey effect then runs with the correct content already in props
+      setEditorKey(`${lessonId}-ready`)
     }
   }, [lesson])
 
@@ -79,6 +105,7 @@ export function LessonPanel({
         title: title.trim(),
         videoUrl: videoUrl.trim() || undefined,
         content: content || undefined,
+        transcript: transcript.trim() || undefined,
         isPublished,
       }
       return isNew
@@ -86,10 +113,11 @@ export function LessonPanel({
         : courseApi.updateLesson(communityId, courseId, sectionId, lessonId!, data)
     },
     onSuccess: () => {
+      toast.success('Lesson saved')
       onSaved()
       if (isNew) onClose()
     },
-    onError: (err) => setError((err as Error).message),
+    onError: (err) => toast.error((err as Error).message),
   })
 
   const { mutate: addLink, isPending: addingLink } = useMutation({
@@ -103,24 +131,58 @@ export function LessonPanel({
       queryClient.invalidateQueries({
         queryKey: ['lesson', communityId, courseId, sectionId, lessonId],
       })
-      setLinkName(''); setLinkUrl(''); setShowLinkField(false)
+      toast.success('Link added')
+      setLinkName('')
+      setLinkUrl('')
+      setShowLinkField(false)
     },
-    onError: (err) => setError((err as Error).message),
+    onError: (err) => toast.error((err as Error).message),
+  })
+
+  const { mutate: addFile, isPending: addingFile } = useMutation({
+    mutationFn: async (file: File) => {
+      const url = await uploadFile(file, 'attachments')
+      return courseApi.addAttachment(communityId, courseId, sectionId, lessonId!, {
+        name: file.name,
+        url,
+        type: 'FILE',
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['lesson', communityId, courseId, sectionId, lessonId],
+      })
+      toast.success('File attached')
+    },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   const { mutate: removeAttachment } = useMutation({
     mutationFn: (attachmentId: string) =>
       courseApi.deleteAttachment(communityId, courseId, sectionId, lessonId!, attachmentId),
-    onSuccess: () =>
+    onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['lesson', communityId, courseId, sectionId, lessonId],
-      }),
+      })
+      toast.success('Attachment removed')
+    },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   function handleSave() {
-    if (!title.trim()) { setError('Title is required'); return }
+    if (!title.trim()) {
+      setError('Title is required')
+      return
+    }
     setError('')
     save()
+  }
+
+  function handleResourceFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    addFile(file)
+    e.target.value = ''
   }
 
   if (!isNew && (isLoading || !lesson)) {
@@ -144,38 +206,41 @@ export function LessonPanel({
         />
       </div>
 
-      {/* Tiptap editor */}
+      {/* Tiptap editor — video inserts at cursor position */}
       <TiptapEditor
         content={content}
         onChange={setContent}
-        onVideoAdd={(url) => { setVideoUrl(url); setShowVideoField(true) }}
-        resetKey={lessonId ?? 'new'}
+        onVideoAdd={(url) => setVideoUrl(url)}
+        resetKey={editorKey}
         className="flex-1 overflow-hidden"
       />
 
-      {/* Inline add-ons */}
-      {(showVideoField || showLinkField || attachments.length > 0) && (
+      {/* Transcript field */}
+      {showTranscriptField && (
+        <div className="border-t border-border px-4 py-3">
+          <div className="flex items-start gap-2">
+            <FileText className="mt-2 h-4 w-4 shrink-0 text-muted-foreground" />
+            <textarea
+              value={transcript}
+              onChange={(e) => setTranscript(e.target.value)}
+              placeholder="Paste or type lesson transcript…"
+              rows={4}
+              className="flex-1 resize-y rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <button
+              type="button"
+              onClick={() => { setShowTranscriptField(false); setTranscript('') }}
+              className="mt-1.5 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Attachments + link form */}
+      {(showLinkField || attachments.length > 0) && (
         <div className="space-y-2 border-t border-border px-4 py-3">
-          {/* Video URL */}
-          {showVideoField && (
-            <div className="flex items-center gap-2">
-              <Video className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <Input
-                value={videoUrl}
-                onChange={(e) => setVideoUrl(e.target.value)}
-                placeholder="YouTube, Vimeo, or direct URL"
-                className="h-8 flex-1 text-sm"
-                autoFocus
-              />
-              <button
-                type="button"
-                onClick={() => setShowVideoField(false)}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                Done
-              </button>
-            </div>
-          )}
           {/* Resource link form */}
           {showLinkField && (
             <div className="space-y-1.5 rounded-lg border border-border p-2.5">
@@ -206,7 +271,11 @@ export function LessonPanel({
                   size="sm"
                   variant="outline"
                   className="h-7 text-xs"
-                  onClick={() => { setShowLinkField(false); setLinkName(''); setLinkUrl('') }}
+                  onClick={() => {
+                    setShowLinkField(false)
+                    setLinkName('')
+                    setLinkUrl('')
+                  }}
                 >
                   Cancel
                 </Button>
@@ -219,7 +288,11 @@ export function LessonPanel({
               key={a.id}
               className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-1.5"
             >
-              <Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              {a.type === 'FILE' ? (
+                <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              ) : (
+                <Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              )}
               <a
                 href={a.url}
                 target="_blank"
@@ -240,9 +313,7 @@ export function LessonPanel({
         </div>
       )}
 
-      {error && (
-        <p className="px-4 pb-1 text-xs text-destructive">{error}</p>
-      )}
+      {error && <p className="px-4 pb-1 text-xs text-destructive">{error}</p>}
 
       {/* Bottom action bar */}
       <div className="flex items-center justify-between border-t border-border px-4 py-3">
@@ -255,17 +326,30 @@ export function LessonPanel({
                 <ChevronDown className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="top">
-              <DropdownMenuItem onClick={() => setShowVideoField(true)}>
-                <Video className="mr-2 h-3.5 w-3.5" />
-                Video URL
-              </DropdownMenuItem>
+            <DropdownMenuContent align="start" side="top" className="min-w-[180px]">
               {!isNew && (
                 <DropdownMenuItem onClick={() => setShowLinkField(true)}>
                   <Link2 className="mr-2 h-3.5 w-3.5" />
-                  Resource link
+                  Add resource link
                 </DropdownMenuItem>
               )}
+              {!isNew && (
+                <DropdownMenuItem
+                  disabled={addingFile}
+                  onClick={() => resourceFileInputRef.current?.click()}
+                >
+                  <Paperclip className="mr-2 h-3.5 w-3.5" />
+                  {addingFile ? 'Uploading…' : 'Add resource file'}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={() => setShowTranscriptField(true)}>
+                <FileText className="mr-2 h-3.5 w-3.5" />
+                Add transcript
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled>
+                <Pin className="mr-2 h-3.5 w-3.5" />
+                Pin community post
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -300,6 +384,14 @@ export function LessonPanel({
           </Button>
         </div>
       </div>
+
+      {/* Hidden file input for resource file uploads */}
+      <input
+        ref={resourceFileInputRef}
+        type="file"
+        className="hidden"
+        onChange={handleResourceFileChange}
+      />
     </div>
   )
 }

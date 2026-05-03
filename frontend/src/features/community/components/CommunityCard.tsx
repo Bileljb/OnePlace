@@ -18,7 +18,10 @@ export function CommunityCard({ community, rank }: CommunityCardProps) {
       className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10"
     >
       {/* Banner */}
-      <div className={`relative h-44 w-full bg-gradient-to-br ${gradient}`}>
+      <div className={`relative h-44 w-full overflow-hidden ${community.coverUrl ? '' : `bg-gradient-to-br ${gradient}`}`}>
+        {community.coverUrl ? (
+          <img src={community.coverUrl} alt="" className="h-full w-full object-cover" />
+        ) : null}
         {rank <= 10 && (
           <span className="absolute left-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-xs font-bold text-white backdrop-blur-sm">
             #{rank}
@@ -31,9 +34,13 @@ export function CommunityCard({ community, rank }: CommunityCardProps) {
         {/* Avatar + name */}
         <div className="mb-3 flex items-center gap-3">
           <div
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${gradient}`}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg overflow-hidden ${community.iconUrl ? '' : `bg-gradient-to-br ${gradient}`}`}
           >
-            <span className="text-sm font-bold text-white">{initials}</span>
+            {community.iconUrl ? (
+              <img src={community.iconUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-sm font-bold text-white">{initials}</span>
+            )}
           </div>
           <h3 className="truncate font-semibold text-foreground group-hover:text-primary transition-colors">
             {community.name}

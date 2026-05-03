@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ImageIcon, Loader2, Upload, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { courseApi } from '@/api/course'
 import { uploadFile } from '@/api/upload'
 import type { CourseAccessType, CourseListItem } from '@/types/course'
@@ -72,21 +73,21 @@ export function CourseFormModal({ open, onOpenChange, communityId, course }: Cou
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['courses', communityId] })
+      toast.success(course ? 'Course updated' : 'Course created')
       onOpenChange(false)
     },
-    onError: (err) => setError((err as Error).message),
+    onError: (err) => toast.error((err as Error).message),
   })
 
   async function handleThumbnailUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
-    setError('')
     try {
       const url = await uploadFile(file)
       setThumbnail(url)
     } catch (err) {
-      setError((err as Error).message ?? 'Upload failed')
+      toast.error((err as Error).message ?? 'Upload failed')
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -98,7 +99,6 @@ export function CourseFormModal({ open, onOpenChange, communityId, course }: Cou
     if (!title.trim()) { setError('Title is required'); return }
     if (accessType === 'BUY_NOW' && !price) { setError('Price is required for Buy now courses'); return }
     if (accessType === 'TIME_UNLOCK' && !unlockAfterDays) { setError('Unlock days is required'); return }
-    setError('')
     mutate()
   }
 

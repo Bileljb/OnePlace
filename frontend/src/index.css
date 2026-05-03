@@ -15,7 +15,7 @@
 }
 
 /* ── Tiptap editor content ─────────────────────────────────────────── */
-.tiptap-body .ProseMirror { outline: none; min-height: 200px; }
+.tiptap-body .ProseMirror { outline: none; min-height: 200px; padding: 1rem 1.5rem; }
 .tiptap-body .ProseMirror > * + * { margin-top: 0.75em; }
 .tiptap-body .ProseMirror h1 { font-size: 1.5rem; font-weight: 700; line-height: 1.3; }
 .tiptap-body .ProseMirror h2 { font-size: 1.25rem; font-weight: 600; line-height: 1.3; }
@@ -49,6 +49,65 @@
   border: none;
   border-top: 1px solid hsl(var(--border));
   margin: 1.25rem 0;
+}
+.tiptap-body .ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  display: block;
+  margin: 0.5rem 0;
+}
+
+/* Video embed node */
+.tiptap-body .video-embed-node {
+  position: relative;
+  margin: 1rem 0;
+  user-select: none;
+}
+.tiptap-body .video-embed-ratio {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: #000;
+}
+.tiptap-body .video-embed-ratio iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+/* Transparent overlay that captures hover so CSS :hover works despite the iframe */
+.tiptap-body .video-embed-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: transparent;
+}
+/* Delete button — hidden by default, shown via JS on hover */
+.tiptap-body .video-embed-delete {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  cursor: pointer;
+  border: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+  line-height: 0;
+}
+.tiptap-body .video-embed-delete:hover {
+  background: rgba(220, 38, 38, 0.85);
 }
 
 /* ── Tiptap rendered (read-only, CoursePage) ────────────────────────── */

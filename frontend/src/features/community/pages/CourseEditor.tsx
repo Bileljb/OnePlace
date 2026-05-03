@@ -11,6 +11,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { courseApi } from '@/api/course'
 import { communityApi } from '@/api/community'
 import { useAuthStore } from '@/store/auth.store'
@@ -23,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { SectionModal } from '../components/SectionModal'
+import { ConfirmModal } from '@/components/ui/confirm-modal'
 import { LessonPanel } from '../components/LessonPanel'
 import { cn } from '@/lib/utils'
 
@@ -185,8 +187,10 @@ export function CourseEditor() {
       courseApi.deleteSection(communityId!, courseId!, sectionId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['course', communityId, courseId] })
+      toast.success('Section deleted')
       setDeletingSection(undefined)
     },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   const { mutate: deleteLesson, isPending: deletingLessonPending } = useMutation({
@@ -194,6 +198,7 @@ export function CourseEditor() {
       courseApi.deleteLesson(communityId!, courseId!, sectionId, lessonId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['course', communityId, courseId] })
+      toast.success('Lesson deleted')
       if (
         activeLesson?.lessonId === deletingLesson?.lessonId &&
         activeLesson?.sectionId === deletingLesson?.sectionId
@@ -202,6 +207,7 @@ export function CourseEditor() {
       }
       setDeletingLesson(null)
     },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   if (!communityId || !courseId) return null
@@ -356,53 +362,25 @@ export function CourseEditor() {
         </main>
       </div>
 
-      {/* Delete section confirmation */}
-      {deletingSection && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-xl">
-            <p className="font-semibold text-foreground">Delete section?</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              "{deletingSection.title}" and all its lessons will be permanently deleted.
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setDeletingSection(undefined)}>
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                disabled={deletingSecPending}
-                onClick={() => deleteSection(deletingSection.id)}
-              >
-                {deletingSecPending ? 'Deleting…' : 'Delete'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={!!deletingSection}
+        onOpenChange={(v) => { if (!v) setDeletingSection(undefined) }}
+        title="Delete section?"
+        description={`"${deletingSection?.title}" and all its lessons will be permanently deleted.`}
+        confirmLabel="Delete"
+        onConfirm={() => deletingSection && deleteSection(deletingSection.id)}
+        isPending={deletingSecPending}
+      />
 
-      {/* Delete lesson confirmation */}
-      {deletingLesson && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-xl">
-            <p className="font-semibold text-foreground">Delete lesson?</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              This lesson will be permanently deleted.
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setDeletingLesson(null)}>
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                disabled={deletingLessonPending}
-                onClick={() => deleteLesson(deletingLesson)}
-              >
-                {deletingLessonPending ? 'Deleting…' : 'Delete'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={!!deletingLesson}
+        onOpenChange={(v) => { if (!v) setDeletingLesson(null) }}
+        title="Delete lesson?"
+        description="This lesson will be permanently deleted."
+        confirmLabel="Delete"
+        onConfirm={() => deletingLesson && deleteLesson(deletingLesson)}
+        isPending={deletingLessonPending}
+      />
 
       <SectionModal
         open={sectionModalOpen}

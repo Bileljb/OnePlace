@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { useNavigate, useParams, Navigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BookOpen, Edit2, Plus, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { courseApi } from '@/api/course'
 import { communityApi } from '@/api/community'
 import { useAuthStore } from '@/store/auth.store'
 import type { CourseListItem, CourseAccessType } from '@/types/course'
 import { Button } from '@/components/ui/button'
 import { CourseFormModal } from '../components/CourseFormModal'
+import { ConfirmModal } from '@/components/ui/confirm-modal'
 
 // ── Access badge ──────────────────────────────────────────────────────────────
 
@@ -138,8 +140,10 @@ export function CourseBuilder() {
     mutationFn: (courseId: string) => courseApi.delete(communityId!, courseId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['courses', communityId] })
+      toast.success('Course deleted')
       setDeletingCourse(undefined)
     },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   if (!communityId) return null
@@ -208,29 +212,15 @@ export function CourseBuilder() {
         </div>
       )}
 
-      {/* Delete confirmation */}
-      {deletingCourse && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-xl">
-            <p className="font-semibold text-foreground">Delete course?</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              "{deletingCourse.title}" and all its sections and lessons will be permanently deleted.
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setDeletingCourse(undefined)}>
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                disabled={deleting}
-                onClick={() => deleteCourse(deletingCourse.id)}
-              >
-                {deleting ? 'Deleting...' : 'Delete'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={!!deletingCourse}
+        onOpenChange={(v) => { if (!v) setDeletingCourse(undefined) }}
+        title="Delete course?"
+        description={`"${deletingCourse?.title}" and all its sections and lessons will be permanently deleted.`}
+        confirmLabel="Delete"
+        onConfirm={() => deletingCourse && deleteCourse(deletingCourse.id)}
+        isPending={deleting}
+      />
 
       <CourseFormModal
         open={formOpen}

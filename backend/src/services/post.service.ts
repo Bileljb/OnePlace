@@ -1,6 +1,8 @@
 import { prisma } from "../database/db.js";
 import { AppError } from "../utils/AppError.js";
 import type { PostType } from "@prisma/client";
+import { createNotification } from "./notification.service.js";
+import { addPoints } from "./points.service.js";
 
 // ─── Create Post ───────────────────────────────────────────────────────────────
 // Any active member can post.
@@ -24,7 +26,7 @@ export async function createPost(
     throw new AppError("You must be an active member to post", 403);
   }
 
-  return prisma.post.create({
+  const post = await prisma.post.create({
     data: {
       communityId,
       authorId,
@@ -37,6 +39,33 @@ export async function createPost(
       author: { select: { id: true, firstname: true, lastname: true } },
     },
   });
+
+  // Award XP for creating a post (fire-and-forget)
+  addPoints(authorId, communityId, "POST_CREATED").catch(() => {});
+
+  // Notify creator and admins about the new post (skip if author is creator/admin)
+  const adminMembers = await prisma.membership.findMany({
+    where: {
+      communityId,
+      role: { in: ["creator", "admin"] },
+      status: "ACTIVE",
+      userId: { not: authorId },
+    },
+    select: { userId: true },
+  });
+
+  const authorName = `${post.author.firstname} ${post.author.lastname}`;
+  for (const m of adminMembers) {
+    createNotification({
+      userId: m.userId,
+      type: "NEW_POST",
+      title: "New post",
+      body: `${authorName} posted: ${post.title}`,
+      link: `/communities/${communityId}/community`,
+    }).catch(() => {});
+  }
+
+  return post;
 }
 
 // ─── Get Post By ID ────────────────────────────────────────────────────────────
@@ -101,12 +130,29 @@ export async function createComment(
     throw new AppError("You must be an active member to comment", 403);
   }
 
-  return prisma.comment.create({
+  const comment = await prisma.comment.create({
     data: { postId, authorId, content: content.trim() },
     include: {
       author: { select: { id: true, firstname: true, lastname: true } },
     },
   });
+
+  // Award XP for commenting (fire-and-forget)
+  addPoints(authorId, post.communityId, "COMMENT_CREATED").catch(() => {});
+
+  // Notify the post author if they're not the commenter
+  if (post.authorId !== authorId) {
+    const authorName = `${comment.author.firstname} ${comment.author.lastname}`;
+    createNotification({
+      userId: post.authorId,
+      type: "NEW_COMMENT",
+      title: "New comment",
+      body: `${authorName} commented on your post: ${post.title}`,
+      link: `/communities/${post.communityId}/post/${postId}`,
+    }).catch(() => {});
+  }
+
+  return comment;
 }
 
 // ─── Get Post Comments ─────────────────────────────────────────────────────────

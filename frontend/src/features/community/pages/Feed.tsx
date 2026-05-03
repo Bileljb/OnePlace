@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Pin, MessageSquare, Trash2, Plus, Image, Video, FileText } from 'lucide-react'
+import { Pin, MessageSquare, Trash2, Plus, Image, Video, FileText, BarChart2 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import { toast } from 'sonner'
 import { postApi } from '@/api/post'
 import { useAuthStore } from '@/store/auth.store'
 import type { Post } from '@/types/post'
 import { Button } from '@/components/ui/button'
 import { CreatePostModal } from '../components/CreatePostModal'
+import { ConfirmModal } from '@/components/ui/confirm-modal'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -19,6 +21,16 @@ const TYPE_ICON = {
   TEXT: FileText,
   IMAGE: Image,
   VIDEO: Video,
+}
+
+function parsePoll(content: string): { options: string[] } | null {
+  try {
+    const data = JSON.parse(content)
+    if (data?.poll === true && Array.isArray(data.options)) return data as { options: string[] }
+    return null
+  } catch {
+    return null
+  }
 }
 
 // ─── PostCard ─────────────────────────────────────────────────────────────────
@@ -76,7 +88,18 @@ function PostCard({
 
       {/* Content */}
       <h3 className="mb-1.5 font-semibold text-foreground">{post.title}</h3>
-      <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">{post.content}</p>
+      {(() => {
+        const poll = parsePoll(post.content)
+        if (poll) {
+          return (
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <BarChart2 className="h-3.5 w-3.5 shrink-0" />
+              <span>{poll.options.length} options</span>
+            </div>
+          )
+        }
+        return <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">{post.content}</p>
+      })()}
 
       {/* Footer */}
       <div className="mt-4 flex items-center gap-3">
@@ -106,6 +129,7 @@ export function Feed() {
   const queryClient = useQueryClient()
   const [createOpen, setCreateOpen] = useState(false)
   const [activeCategory, setActiveCategory] = useState<string>('All')
+  const [deletingPostId, setDeletingPostId] = useState<string | null>(null)
 
   const isMock = communityId?.startsWith('mock-')
 
@@ -115,9 +139,14 @@ export function Feed() {
     enabled: !!communityId && !isMock,
   })
 
-  const { mutate: deletePost } = useMutation({
+  const { mutate: deletePost, isPending: deletingPost } = useMutation({
     mutationFn: (postId: string) => postApi.delete(communityId!, postId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['posts', communityId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['posts', communityId] })
+      toast.success('Post deleted')
+      setDeletingPostId(null)
+    },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   const posts = data?.data?.posts ?? []
@@ -194,7 +223,7 @@ export function Feed() {
               post={post}
               communityId={communityId!}
               canDelete={user?.id === post.authorId}
-              onDelete={deletePost}
+              onDelete={(id) => setDeletingPostId(id)}
             />
           ))}
         </div>
@@ -204,6 +233,16 @@ export function Feed() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         communityId={communityId!}
+      />
+
+      <ConfirmModal
+        open={!!deletingPostId}
+        onOpenChange={(v) => { if (!v) setDeletingPostId(null) }}
+        title="Delete post?"
+        description="This post and all its comments will be permanently deleted."
+        confirmLabel="Delete"
+        onConfirm={() => deletingPostId && deletePost(deletingPostId)}
+        isPending={deletingPost}
       />
     </div>
   )

@@ -2,6 +2,8 @@ import { prisma } from "../database/db.js";
 import { AppError } from "../utils/AppError.js";
 import * as paymentService from "./payment.service.js";
 import { sendPaymentConfirmationEmail } from "../utils/email.utils.js";
+import { createNotification } from "./notification.service.js";
+import { addPoints } from "./points.service.js";
 import type {
   Community,
   CommunityPricing,
@@ -153,25 +155,46 @@ export async function joinCommunity(
   });
   if (existing) throw new AppError("You are already a member of this community", 409);
 
+  let membership;
   switch (community.pricingModel) {
     case "FREE":
-      return joinFree(communityId, userId);
+      membership = await joinFree(communityId, userId);
+      break;
 
     case "FREEMIUM":
-      return joinFreemium(communityId, userId);
+      membership = await joinFreemium(communityId, userId);
+      break;
 
     case "SUBSCRIPTION":
       if (!billingInterval) {
         throw new AppError("billingInterval (MONTHLY | YEARLY) is required", 400);
       }
-      return joinSubscription(community, userId, billingInterval);
+      membership = await joinSubscription(community, userId, billingInterval);
+      break;
 
     case "ONE_TIME":
-      return joinOneTime(community, userId);
+      membership = await joinOneTime(community, userId);
+      break;
 
     default:
       throw new AppError("Unsupported pricing model", 500);
   }
+
+  // Award XP for joining (fire-and-forget)
+  addPoints(userId, communityId, "MEMBERSHIP_JOINED").catch(() => {});
+
+  // Notify the community creator (fire-and-forget)
+  if (community.creatorId !== userId) {
+    createNotification({
+      userId: community.creatorId,
+      type: "MEMBER_JOINED",
+      title: "New member",
+      body: `A new member joined ${community.name}`,
+      link: `/communities/${communityId}/settings/members`,
+    }).catch(() => {});
+  }
+
+  return membership;
 }
 
 async function joinFree(communityId: string, userId: string) {
@@ -448,7 +471,7 @@ export async function getCommunityById(communityId: string) {
 export async function updateCommunity(
   communityId: string,
   requesterId: string,
-  input: { name?: string; description?: string; isPrivate?: boolean }
+  input: { name?: string; description?: string; isPrivate?: boolean; coverUrl?: string | null; iconUrl?: string | null }
 ) {
   await assertCreator(communityId, requesterId);
 
@@ -462,6 +485,8 @@ export async function updateCommunity(
       ...(input.name !== undefined && { name: input.name.trim() }),
       ...(input.description !== undefined && { description: input.description }),
       ...(input.isPrivate !== undefined && { isPrivate: input.isPrivate }),
+      ...(input.coverUrl !== undefined && { coverUrl: input.coverUrl }),
+      ...(input.iconUrl !== undefined && { iconUrl: input.iconUrl }),
     },
   });
 }

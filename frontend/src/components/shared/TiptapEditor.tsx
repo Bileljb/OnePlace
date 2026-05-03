@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
+import { Node } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
+import Image from '@tiptap/extension-image'
 import {
   Bold,
+  Image as ImageIcon,
   Italic,
   Link2,
   List,
   ListOrdered,
+  Loader2,
   Minus,
   Quote,
   Strikethrough,
@@ -15,7 +19,129 @@ import {
   Video,
   X,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { uploadFile } from '@/api/upload'
+
+// ─── Video URL → embed URL ────────────────────────────────────────────────────
+
+function toEmbedUrl(url: string): string {
+  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s?]+)/)
+  if (yt) return `https://www.youtube.com/embed/${yt[1]}`
+  const vimeo = url.match(/vimeo\.com\/(\d+)/)
+  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`
+  const loom = url.match(/loom\.com\/share\/([a-zA-Z0-9]+)/)
+  if (loom) return `https://www.loom.com/embed/${loom[1]}`
+  return url
+}
+
+// X icon as inline SVG (used inside manually-created DOM nodes)
+const X_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
+
+// ─── VideoEmbed node extension ────────────────────────────────────────────────
+
+const VideoEmbed = Node.create({
+  name: 'videoEmbed',
+  group: 'block',
+  atom: true,
+  draggable: true,
+
+  addAttributes() {
+    return { src: { default: null } }
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'div[data-video-embed]',
+        getAttrs: (el) => ({ src: (el as HTMLElement).getAttribute('data-src') }),
+      },
+    ]
+  },
+
+  renderHTML({ node }) {
+    return ['div', { 'data-video-embed': '', 'data-src': node.attrs.src }]
+  },
+
+  addNodeView() {
+    return ({ node, getPos, editor }) => {
+      // Outer wrapper — position:relative so the overlay/button sit on top
+      const dom = document.createElement('div')
+      dom.setAttribute('data-video-embed', '')
+      dom.setAttribute('data-src', node.attrs.src as string)
+      dom.className = 'video-embed-node'
+
+      // 16:9 ratio box
+      const ratio = document.createElement('div')
+      ratio.className = 'video-embed-ratio'
+
+      const iframe = document.createElement('iframe')
+      iframe.src = toEmbedUrl(node.attrs.src as string)
+      iframe.allowFullscreen = true
+      iframe.setAttribute('frameborder', '0')
+      iframe.setAttribute(
+        'allow',
+        'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share',
+      )
+      ratio.appendChild(iframe)
+
+      // Transparent overlay — sits above the iframe so the parent receives
+      // mouseenter/mouseleave events (iframes swallow pointer events otherwise)
+      const overlay = document.createElement('div')
+      overlay.className = 'video-embed-overlay'
+
+      // Delete button
+      const deleteBtn = document.createElement('button')
+      deleteBtn.type = 'button'
+      deleteBtn.title = 'Remove video'
+      deleteBtn.className = 'video-embed-delete'
+      deleteBtn.innerHTML = X_SVG
+      deleteBtn.addEventListener('mousedown', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      })
+      deleteBtn.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        if (typeof getPos === 'function') {
+          const pos = getPos()
+          if (pos !== undefined) {
+            editor.chain().focus().deleteRange({ from: pos, to: pos + node.nodeSize }).run()
+          }
+        }
+      })
+
+      // Show / hide the delete button on hover via JS because the iframe
+      // swallows pointer events — CSS :hover on the parent won't fire
+      const show = () => { deleteBtn.style.opacity = '1' }
+      const hide = () => { deleteBtn.style.opacity = '0' }
+      overlay.addEventListener('mouseenter', show)
+      overlay.addEventListener('mouseleave', hide)
+      deleteBtn.addEventListener('mouseenter', show)
+      deleteBtn.addEventListener('mouseleave', hide)
+
+      dom.appendChild(ratio)
+      dom.appendChild(overlay)
+      dom.appendChild(deleteBtn)
+
+      return { dom }
+    }
+  },
+})
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function docHasVideo(doc: ReturnType<typeof useEditor>['state']['doc'] | undefined): boolean {
+  if (!doc) return false
+  let found = false
+  doc.descendants((node) => {
+    if (node.type.name === 'videoEmbed') {
+      found = true
+      return false
+    }
+  })
+  return found
+}
 
 // ─── Toolbar button ───────────────────────────────────────────────────────────
 
@@ -23,11 +149,13 @@ function ToolbarBtn({
   onClick,
   isActive,
   title,
+  disabled,
   children,
 }: {
   onClick: () => void
   isActive?: boolean
   title: string
+  disabled?: boolean
   children: React.ReactNode
 }) {
   return (
@@ -35,14 +163,17 @@ function ToolbarBtn({
       type="button"
       onMouseDown={(e) => {
         e.preventDefault()
-        onClick()
+        if (!disabled) onClick()
       }}
       title={title}
+      disabled={disabled}
       className={cn(
         'flex h-7 min-w-[1.75rem] items-center justify-center rounded px-1.5 text-xs font-medium transition-colors',
-        isActive
-          ? 'bg-foreground text-background'
-          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+        disabled
+          ? 'cursor-not-allowed opacity-35'
+          : isActive
+            ? 'bg-foreground text-background'
+            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
       )}
     >
       {children}
@@ -77,10 +208,11 @@ function VideoModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
     >
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
-        {/* Header */}
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-xl font-bold text-foreground">Add a video</h2>
           <button
@@ -91,27 +223,29 @@ function VideoModal({
           </button>
         </div>
 
-        {/* URL input */}
         <div className="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 focus-within:ring-2 focus-within:ring-ring">
           <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleConfirm() }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleConfirm()
+            }}
             placeholder="YouTube, Loom, Vimeo, or Wistia link"
             autoFocus
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
           />
         </div>
 
-        {/* Dropzone */}
         <div
-          onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+          onDragOver={(e) => {
+            e.preventDefault()
+            setDragging(true)
+          }}
           onDragLeave={() => setDragging(false)}
           onDrop={(e) => {
             e.preventDefault()
             setDragging(false)
-            // File upload not yet implemented — user can paste URL above
           }}
           onClick={() => fileInputRef.current?.click()}
           className={cn(
@@ -131,13 +265,10 @@ function VideoModal({
             type="file"
             accept="video/*"
             className="hidden"
-            onChange={() => {
-              // File upload not yet implemented
-            }}
+            onChange={() => {}}
           />
         </div>
 
-        {/* Actions */}
         <div className="mt-5 flex items-center justify-end gap-3">
           <button
             onClick={onClose}
@@ -168,40 +299,79 @@ function VideoModal({
 interface TiptapEditorProps {
   content: string
   onChange: (html: string) => void
-  /** Called when the user confirms a video URL from the video modal. */
   onVideoAdd?: (url: string) => void
-  /** Change this value to reset the editor to `content` (e.g. when switching lessons). */
   resetKey?: string | number
   className?: string
 }
 
-export function TiptapEditor({ content, onChange, onVideoAdd, resetKey, className }: TiptapEditorProps) {
+export function TiptapEditor({
+  content,
+  onChange,
+  onVideoAdd,
+  resetKey,
+  className,
+}: TiptapEditorProps) {
   const [videoModalOpen, setVideoModalOpen] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const [hasVideo, setHasVideo] = useState(false)
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   const editor = useEditor({
-    extensions: [StarterKit, Link.configure({ openOnClick: false })],
+    extensions: [
+      StarterKit,
+      Link.configure({ openOnClick: false }),
+      Image.configure({ inline: false, allowBase64: false }),
+      VideoEmbed,
+    ],
     content,
-    onUpdate: ({ editor }) => onChange(editor.getHTML()),
+    onUpdate: ({ editor }) => {
+      onChange(editor.getHTML())
+      setHasVideo(docHasVideo(editor.state.doc))
+    },
+    onCreate: ({ editor }) => {
+      setHasVideo(docHasVideo(editor.state.doc))
+    },
   })
 
-  // Reset editor content when resetKey changes (e.g. switching lessons)
   useEffect(() => {
     if (!editor) return
     editor.commands.setContent(content || '')
+    setHasVideo(docHasVideo(editor.state.doc))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey])
 
   if (!editor) return null
 
-  const handleAddLink = () => {
+  function handleAddLink() {
     const url = window.prompt('Enter URL')
     if (!url) return
-    editor.chain().focus().setLink({ href: url }).run()
+    editor!.chain().focus().setLink({ href: url }).run()
+  }
+
+  function handleVideoConfirm(url: string) {
+    editor!.chain().focus().insertContent({ type: 'videoEmbed', attrs: { src: url } }).run()
+    setHasVideo(true)
+    onVideoAdd?.(url)
+  }
+
+  async function handleImageFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !editor) return
+    setUploadingImage(true)
+    try {
+      const url = await uploadFile(file, 'lessons')
+      editor.chain().focus().setImage({ src: url }).run()
+    } catch (err) {
+      toast.error((err as Error).message || 'Image upload failed')
+    } finally {
+      setUploadingImage(false)
+      e.target.value = ''
+    }
   }
 
   return (
     <>
-      <div className={cn('flex flex-col overflow-hidden', className)}>
+      <div className={cn('flex flex-col overflow-hidden rounded-b-lg shadow-[0_4px_24px_0_rgba(0,0,0,0.18)]', className)}>
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-0.5 border-b border-border bg-background/50 px-2 py-1.5">
           <ToolbarBtn
@@ -291,28 +461,56 @@ export function TiptapEditor({ content, onChange, onVideoAdd, resetKey, classNam
           >
             <Minus className="h-3.5 w-3.5" />
           </ToolbarBtn>
-          {onVideoAdd && (
-            <>
-              <Divider />
-              <ToolbarBtn
-                onClick={() => setVideoModalOpen(true)}
-                isActive={false}
-                title="Add video"
-              >
-                <Video className="h-3.5 w-3.5" />
-              </ToolbarBtn>
-            </>
-          )}
+          <Divider />
+
+          {/* Image upload — uses onClick (not onMouseDown) so the browser
+              treats imageInputRef.current.click() as a trusted user gesture */}
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => imageInputRef.current?.click()}
+            title="Upload image"
+            disabled={uploadingImage}
+            className={cn(
+              'flex h-7 min-w-[1.75rem] items-center justify-center rounded px-1.5 text-xs font-medium transition-colors',
+              uploadingImage
+                ? 'cursor-not-allowed opacity-35'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
+          >
+            {uploadingImage ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ImageIcon className="h-3.5 w-3.5" />
+            )}
+          </button>
+
+          {/* Video — disabled once a video already exists in the lesson */}
+          <ToolbarBtn
+            onClick={() => setVideoModalOpen(true)}
+            isActive={false}
+            title={hasVideo ? 'Remove the existing video first' : 'Add video'}
+            disabled={hasVideo}
+          >
+            <Video className="h-3.5 w-3.5" />
+          </ToolbarBtn>
+
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleImageFileChange}
+          />
         </div>
 
         {/* Editor area */}
         <EditorContent editor={editor} className="tiptap-body flex-1 overflow-y-auto" />
       </div>
 
-      {/* Video modal */}
       {videoModalOpen && (
         <VideoModal
-          onConfirm={(url) => onVideoAdd!(url)}
+          onConfirm={handleVideoConfirm}
           onClose={() => setVideoModalOpen(false)}
         />
       )}

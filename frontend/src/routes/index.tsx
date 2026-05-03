@@ -23,6 +23,8 @@ import { CourseBuilder } from '@/features/community/pages/CourseBuilder'
 import { CourseEditor } from '@/features/community/pages/CourseEditor'
 import { SubscriptionPage } from '@/features/community/pages/SubscriptionPage'
 import { AnalyticsPage } from '@/features/community/pages/AnalyticsPage'
+import { CalendarPage } from '@/features/community/pages/CalendarPage'
+import { LeaderboardPage } from '@/features/community/pages/LeaderboardPage'
 import { AdminLayout } from '@/features/admin/components/AdminLayout'
 import { AdminUsersPage } from '@/features/admin/pages/AdminUsersPage'
 import { AdminCommunitiesPage } from '@/features/admin/pages/AdminCommunitiesPage'
@@ -30,6 +32,11 @@ import { AdminAnalyticsPage } from '@/features/admin/pages/AdminAnalyticsPage'
 import { ProfileLayout } from '@/features/profile/components/ProfileLayout'
 import { ProfilePage } from '@/features/profile/pages/ProfilePage'
 import { MyCommunitiesPage } from '@/features/profile/pages/MyCommunitiesPage'
+
+function RootRedirect() {
+  const lastId = localStorage.getItem('lastCommunityId')
+  return <Navigate to={lastId ? `/communities/${lastId}/community` : '/communities'} replace />
+}
 
 export const router = createBrowserRouter([
   // ── Public auth ────────────────────────────────────────────────────────────
@@ -46,7 +53,7 @@ export const router = createBrowserRouter([
   {
     element: <AuthGuard />,
     children: [
-      { path: '/', element: <Navigate to="/communities" replace /> },
+      { path: '/', element: <RootRedirect /> },
       { path: '/communities/new', element: <CreateCommunity /> },
 
       // Admin panel
@@ -98,6 +105,8 @@ export const router = createBrowserRouter([
               { path: 'community', element: <Feed /> },
               { path: 'community/posts/:postId', element: <PostDetail /> },
               { path: 'classroom', element: <Classroom /> },
+              { path: 'calendar', element: <CalendarPage /> },
+              { path: 'leaderboards', element: <LeaderboardPage /> },
               { path: 'classroom/manage', element: <CourseBuilder /> },
               { path: 'classroom/manage/:courseId', element: <CourseEditor /> },
               { path: 'classroom/:courseId', element: <CoursePage /> },

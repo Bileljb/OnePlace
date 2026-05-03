@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { communityApi } from '@/api/community'
 import type { BillingInterval, CommunityDetail } from '@/types/community'
 import {
@@ -23,7 +24,7 @@ export function JoinModal({ open, onOpenChange, community }: JoinModalProps) {
   const navigate = useNavigate()
   const [billingInterval, setBillingInterval] = useState<BillingInterval>('MONTHLY')
 
-  const { mutate: join, isPending, error } = useMutation({
+  const { mutate: join, isPending } = useMutation({
     mutationFn: () => {
       const interval =
         community.pricingModel === 'SUBSCRIPTION' ? billingInterval : undefined
@@ -31,9 +32,11 @@ export function JoinModal({ open, onOpenChange, community }: JoinModalProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['membership', community.id] })
+      toast.success(`Welcome to ${community.name}!`)
       onOpenChange(false)
       navigate(`/communities/${community.id}/community`)
     },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   const { pricing } = community
@@ -99,12 +102,6 @@ export function JoinModal({ open, onOpenChange, community }: JoinModalProps) {
             <p className="mt-1 text-2xl font-bold text-foreground">${pricing.oneTimePrice}</p>
             <p className="mt-1 text-xs text-muted-foreground">Lifetime access, no recurring charges.</p>
           </div>
-        )}
-
-        {error && (
-          <p className="mb-3 text-sm text-destructive">
-            {(error as Error).message ?? 'Something went wrong. Please try again.'}
-          </p>
         )}
 
         <Button onClick={() => join()} disabled={isPending} className="w-full">

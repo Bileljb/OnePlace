@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Search, UserX, UserCheck } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import { toast } from 'sonner'
 import { adminApi } from '@/api/admin'
 import { useAuthStore } from '@/store/auth.store'
 import type { AdminUser } from '@/types/admin'
@@ -39,12 +40,14 @@ function UserRow({ user, currentUserId }: { user: AdminUser; currentUserId: stri
 
   const { mutate: suspend, isPending: suspending } = useMutation({
     mutationFn: () => adminApi.suspendUser(user.id),
-    onSuccess: invalidate,
+    onSuccess: () => { invalidate(); toast.success(`${user.firstname} suspended`) },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   const { mutate: unsuspend, isPending: unsuspending } = useMutation({
     mutationFn: () => adminApi.unsuspendUser(user.id),
-    onSuccess: invalidate,
+    onSuccess: () => { invalidate(); toast.success(`${user.firstname} unsuspended`) },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   const isSelf = user.id === currentUserId

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { userApi } from '@/api/user'
 import { useAuthStore } from '@/store/auth.store'
 import { Button } from '@/components/ui/button'
@@ -24,23 +25,18 @@ export function ProfilePage() {
     }
   }, [user])
 
-  const {
-    mutate: saveName,
-    isPending: isSavingName,
-    isSuccess: nameSaved,
-    error: nameError,
-  } = useMutation({
+  const { mutate: saveName, isPending: isSavingName } = useMutation({
     mutationFn: () => userApi.updateMe({ firstname, lastname }),
     onSuccess: (res) => {
       if (res.data?.user) setUser(res.data.user)
+      toast.success('Profile updated')
     },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   const {
     mutate: savePassword,
     isPending: isSavingPassword,
-    isSuccess: passwordSaved,
-    error: passwordMutationError,
     reset: resetPasswordMutation,
   } = useMutation({
     mutationFn: () => userApi.updateMe({ currentPassword, newPassword }),
@@ -48,7 +44,9 @@ export function ProfilePage() {
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
+      toast.success('Password updated')
     },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   function handlePasswordSubmit() {
@@ -94,13 +92,6 @@ export function ProfilePage() {
           <Label>Email</Label>
           <Input value={user?.email ?? ''} disabled />
         </div>
-
-        {nameError && (
-          <p className="text-sm text-destructive">{(nameError as Error).message}</p>
-        )}
-        {nameSaved && (
-          <p className="text-sm text-emerald-600">Saved successfully.</p>
-        )}
 
         <div className="flex justify-end">
           <Button
@@ -152,13 +143,8 @@ export function ProfilePage() {
           />
         </div>
 
-        {(passwordError || passwordMutationError) && (
-          <p className="text-sm text-destructive">
-            {passwordError || (passwordMutationError as Error).message}
-          </p>
-        )}
-        {passwordSaved && (
-          <p className="text-sm text-emerald-600">Password updated.</p>
+        {passwordError && (
+          <p className="text-sm text-destructive">{passwordError}</p>
         )}
 
         <div className="flex justify-end">

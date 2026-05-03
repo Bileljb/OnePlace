@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { courseApi } from '@/api/course'
 import type { Course } from '@/types/course'
 import {
@@ -25,13 +26,15 @@ export function PurchaseCourseModal({
 }: PurchaseCourseModalProps) {
   const queryClient = useQueryClient()
 
-  const { mutate: purchase, isPending, error } = useMutation({
+  const { mutate: purchase, isPending } = useMutation({
     mutationFn: () => courseApi.purchase(communityId, course.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['course', course.id] })
       queryClient.invalidateQueries({ queryKey: ['courses', communityId] })
+      toast.success('Course unlocked!')
       onOpenChange(false)
     },
+    onError: (err) => toast.error((err as Error).message),
   })
 
   return (
@@ -47,10 +50,6 @@ export function PurchaseCourseModal({
           <p className="mt-1 text-3xl font-bold text-foreground">${course.price}</p>
           <p className="mt-1 text-xs text-muted-foreground">Lifetime access. No recurring charges.</p>
         </div>
-
-        {error && (
-          <p className="mb-3 text-sm text-destructive">{(error as Error).message}</p>
-        )}
 
         <Button onClick={() => purchase()} disabled={isPending} className="w-full">
           {isPending ? 'Processing...' : `Buy for $${course.price}`}
