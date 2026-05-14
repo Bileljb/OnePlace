@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Trash2, MessageSquare, Pin, Image, Video, FileText, Send } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
+import { xpToast } from '@/lib/xpToast'
 import { postApi } from '@/api/post'
 import { useAuthStore } from '@/store/auth.store'
 import type { Comment } from '@/types/post'
@@ -139,6 +140,7 @@ export function PostDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['comments', postId] })
       setCommentText('')
+      xpToast(2)
     },
   })
 

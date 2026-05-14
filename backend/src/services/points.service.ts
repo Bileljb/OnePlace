@@ -55,32 +55,43 @@ export async function getUserStats(userId: string, communityId: string) {
 // ─── Build a leaderboard for a time window ────────────────────────────────────
 
 async function buildLeaderboard(communityId: string, since: Date | null, limit = 20) {
-  const where = { communityId, ...(since ? { createdAt: { gte: since } } : {}) };
+  // Base from memberships so members with 0 points are always included
+  const memberships = await prisma.membership.findMany({
+    where: { communityId, status: "ACTIVE" },
+    select: { userId: true },
+  });
+  if (memberships.length === 0) return [];
+
+  const memberIds = memberships.map((m) => m.userId);
 
   const grouped = await prisma.userPoints.groupBy({
     by: ["userId"],
-    where,
+    where: {
+      communityId,
+      userId: { in: memberIds },
+      ...(since ? { createdAt: { gte: since } } : {}),
+    },
     _sum: { points: true },
-    orderBy: { _sum: { points: "desc" } },
-    take: limit,
   });
 
-  if (grouped.length === 0) return [];
+  const pointsMap = new Map(grouped.map((g) => [g.userId, g._sum.points ?? 0]));
 
-  const userIds = grouped.map((g) => g.userId);
   const users = await prisma.user.findMany({
-    where: { id: { in: userIds } },
-    select: { id: true, firstname: true, lastname: true },
+    where: { id: { in: memberIds } },
+    select: { id: true, firstname: true, lastname: true, avatarUrl: true },
   });
-  const userMap = new Map(users.map((u) => [u.id, u]));
 
-  return grouped.map((g, i) => ({
-    rank: i + 1,
-    userId: g.userId,
-    firstname: userMap.get(g.userId)?.firstname ?? "",
-    lastname: userMap.get(g.userId)?.lastname ?? "",
-    points: g._sum.points ?? 0,
-  }));
+  return users
+    .map((u) => ({
+      userId: u.id,
+      firstname: u.firstname,
+      lastname: u.lastname,
+      avatarUrl: u.avatarUrl,
+      points: pointsMap.get(u.id) ?? 0,
+    }))
+    .sort((a, b) => b.points - a.points)
+    .slice(0, limit)
+    .map((u, i) => ({ rank: i + 1, ...u }));
 }
 
 // ─── Level distribution across all members ────────────────────────────────────
@@ -93,8 +104,8 @@ async function getLevelDistribution(communityId: string) {
     _sum: { points: true },
   });
 
-  // Count all memberships to compute percentages
-  const totalMembers = await prisma.membership.count({ where: { communityId } });
+  // Count only active memberships to compute percentages
+  const totalMembers = await prisma.membership.count({ where: { communityId, status: "ACTIVE" } });
   if (totalMembers === 0) return LEVELS.map((l) => ({ ...l, count: 0, percentage: 0 }));
 
   const levelCounts: Record<number, number> = {};

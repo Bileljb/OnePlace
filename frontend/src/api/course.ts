@@ -84,6 +84,16 @@ export const courseApi = {
   deleteSection: (communityId: string, courseId: string, sectionId: string) =>
     api.delete(`${base(communityId)}/${courseId}/sections/${sectionId}`).then((r) => r.data),
 
+  reorderSections: (communityId: string, courseId: string, orderedIds: string[]) =>
+    api
+      .put(`${base(communityId)}/${courseId}/sections/reorder`, { orderedIds })
+      .then((r) => r.data),
+
+  reorderLessons: (communityId: string, courseId: string, sectionId: string, orderedIds: string[]) =>
+    api
+      .put(`${base(communityId)}/${courseId}/sections/${sectionId}/lessons/reorder`, { orderedIds })
+      .then((r) => r.data),
+
   // ── Lessons ──────────────────────────────────────────────────────────────────
 
   getLesson: (communityId: string, courseId: string, sectionId: string, lessonId: string) =>
@@ -175,5 +185,10 @@ export const courseApi = {
   markIncomplete: (communityId: string, courseId: string, sectionId: string, lessonId: string) =>
     api
       .delete(`${lessonBase(communityId, courseId, sectionId)}/${lessonId}/complete`)
+      .then((r) => r.data),
+
+  saveVideoPosition: (communityId: string, courseId: string, sectionId: string, lessonId: string, position: number) =>
+    api
+      .patch(`${lessonBase(communityId, courseId, sectionId)}/${lessonId}/progress`, { position })
       .then((r) => r.data),
 }

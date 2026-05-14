@@ -15,6 +15,24 @@ export interface CreateEventInput {
   emailReminder?: boolean;
 }
 
+// ─── Daily.co room creation ────────────────────────────────────────────────────
+
+async function createDailyRoom(): Promise<string> {
+  const apiKey = process.env.DAILY_API_KEY;
+  if (!apiKey) throw new AppError("DAILY_API_KEY is not configured", 500);
+
+  const res = await fetch("https://api.daily.co/v1/rooms", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+  });
+
+  if (!res.ok) throw new AppError("Failed to create call room", 500);
+  const data = (await res.json()) as { url: string };
+  return data.url;
+}
+
 // ─── List events for a community in a given month ──────────────────────────────
 export async function listEvents(
   communityId: string,
@@ -22,7 +40,7 @@ export async function listEvents(
   month: number // 1-based
 ) {
   const start = new Date(year, month - 1, 1);
-  const end = new Date(year, month, 1); // first day of next month
+  const end = new Date(year, month, 1);
 
   return prisma.event.findMany({
     where: {
@@ -56,6 +74,9 @@ export async function createEvent(
     throw new AppError("Only creators and admins can create events", 403);
   }
 
+  const isOnePlaceCall = input.location?.trim() === "OnePlace Call";
+  const callRoomUrl = isOnePlaceCall ? await createDailyRoom() : null;
+
   return prisma.event.create({
     data: {
       communityId,
@@ -64,6 +85,7 @@ export async function createEvent(
       description: input.description?.trim() ?? null,
       coverUrl: input.coverUrl ?? null,
       location: input.location?.trim() ?? null,
+      callRoomUrl,
       startAt: new Date(input.startAt),
       duration: input.duration ?? null,
       timezone: input.timezone ?? "UTC",

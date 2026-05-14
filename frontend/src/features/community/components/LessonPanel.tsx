@@ -67,8 +67,11 @@ export function LessonPanel({
   const [linkUrl, setLinkUrl] = useState('')
 
   const resourceFileInputRef = useRef<HTMLInputElement>(null)
+  // Holds the resolved lessonId after an auto-save on a new lesson
+  const resolvedLessonId = useRef<string | null>(lessonId)
 
   useEffect(() => {
+    resolvedLessonId.current = lessonId
     if (isNew) {
       setTitle('')
       setContent('')
@@ -81,7 +84,7 @@ export function LessonPanel({
       setShowTranscriptField(false)
       setEditorKey('new')
     }
-  }, [isNew])
+  }, [isNew, lessonId])
 
   useEffect(() => {
     if (lesson) {
@@ -120,9 +123,37 @@ export function LessonPanel({
     onError: (err) => toast.error((err as Error).message),
   })
 
+  // Save first (if new) then run the callback — used by attachment actions
+  async function saveIfNewThen(action: (savedLessonId: string) => void) {
+    if (!title.trim()) {
+      setError('Add a title before attaching resources')
+      return
+    }
+    if (!isNew) {
+      action(lessonId!)
+      return
+    }
+    try {
+      const res = await courseApi.createLesson(communityId, courseId, sectionId, {
+        title: title.trim(),
+        videoUrl: videoUrl.trim() || undefined,
+        content: content || undefined,
+        transcript: transcript.trim() || undefined,
+        isPublished,
+      })
+      const newId = res.data?.lesson?.id
+      if (!newId) throw new Error('No lesson ID returned')
+      resolvedLessonId.current = newId
+      onSaved()
+      action(newId)
+    } catch (err) {
+      toast.error((err as Error).message)
+    }
+  }
+
   const { mutate: addLink, isPending: addingLink } = useMutation({
     mutationFn: () =>
-      courseApi.addAttachment(communityId, courseId, sectionId, lessonId!, {
+      courseApi.addAttachment(communityId, courseId, sectionId, resolvedLessonId.current!, {
         name: linkName.trim(),
         url: linkUrl.trim(),
         type: 'LINK',
@@ -142,7 +173,7 @@ export function LessonPanel({
   const { mutate: addFile, isPending: addingFile } = useMutation({
     mutationFn: async (file: File) => {
       const url = await uploadFile(file, 'attachments')
-      return courseApi.addAttachment(communityId, courseId, sectionId, lessonId!, {
+      return courseApi.addAttachment(communityId, courseId, sectionId, resolvedLessonId.current!, {
         name: file.name,
         url,
         type: 'FILE',
@@ -327,21 +358,19 @@ export function LessonPanel({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" side="top" className="min-w-[180px]">
-              {!isNew && (
-                <DropdownMenuItem onClick={() => setShowLinkField(true)}>
-                  <Link2 className="mr-2 h-3.5 w-3.5" />
-                  Add resource link
-                </DropdownMenuItem>
-              )}
-              {!isNew && (
-                <DropdownMenuItem
-                  disabled={addingFile}
-                  onClick={() => resourceFileInputRef.current?.click()}
-                >
-                  <Paperclip className="mr-2 h-3.5 w-3.5" />
-                  {addingFile ? 'Uploading…' : 'Add resource file'}
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuItem
+                onClick={() => saveIfNewThen(() => setShowLinkField(true))}
+              >
+                <Link2 className="mr-2 h-3.5 w-3.5" />
+                Add resource link
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={addingFile}
+                onClick={() => saveIfNewThen(() => resourceFileInputRef.current?.click())}
+              >
+                <Paperclip className="mr-2 h-3.5 w-3.5" />
+                {addingFile ? 'Uploading…' : 'Add resource file'}
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setShowTranscriptField(true)}>
                 <FileText className="mr-2 h-3.5 w-3.5" />
                 Add transcript

@@ -5,6 +5,7 @@ import type {
   CommunityAnalytics,
   CommunityDetail,
   CommunityListItem,
+  CommunityMember,
   Membership,
   PlatformPlan,
   PricingModel,
@@ -78,5 +79,10 @@ export const communityApi = {
   getAnalytics: (id: string) =>
     api
       .get<ApiResponse<CommunityAnalytics>>(`/communities/${id}/analytics`)
+      .then((r) => r.data),
+
+  getMembers: (id: string) =>
+    api
+      .get<ApiResponse<{ members: CommunityMember[] }>>(`/communities/${id}/members`)
       .then((r) => r.data),
 }

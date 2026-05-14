@@ -317,13 +317,23 @@ export async function createLesson(
 
 // ─── Get Lesson ────────────────────────────────────────────────────────────────
 
-export async function getLesson(lessonId: string) {
+export async function getLesson(lessonId: string, userId?: string) {
   const lesson = await prisma.lesson.findUnique({
     where: { id: lessonId },
     include: { attachments: true },
   });
   if (!lesson) throw new AppError("Lesson not found", 404);
-  return lesson;
+
+  let videoPosition: number | null = null;
+  if (userId) {
+    const progress = await prisma.lessonProgress.findUnique({
+      where: { userId_lessonId: { userId, lessonId } },
+      select: { videoPosition: true },
+    });
+    videoPosition = progress?.videoPosition ?? null;
+  }
+
+  return { ...lesson, videoPosition };
 }
 
 // ─── Update Lesson ─────────────────────────────────────────────────────────────
@@ -469,6 +479,39 @@ export async function saveVideoPosition(lessonId: string, userId: string, positi
   });
 }
 
+// ─── Reorder Sections ─────────────────────────────────────────────────────────
+
+export async function reorderSections(courseId: string, requesterId: string, orderedIds: string[]) {
+  const course = await prisma.course.findUnique({ where: { id: courseId } });
+  if (!course) throw new AppError("Course not found", 404);
+
+  await requireCreatorOrAdmin(course.communityId, requesterId);
+
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.section.update({ where: { id }, data: { order: index } })
+    )
+  );
+}
+
+// ─── Reorder Lessons ──────────────────────────────────────────────────────────
+
+export async function reorderLessons(sectionId: string, requesterId: string, orderedIds: string[]) {
+  const section = await prisma.section.findUnique({
+    where: { id: sectionId },
+    include: { course: { select: { communityId: true } } },
+  });
+  if (!section) throw new AppError("Section not found", 404);
+
+  await requireCreatorOrAdmin(section.course.communityId, requesterId);
+
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.lesson.update({ where: { id }, data: { order: index } })
+    )
+  );
+}
+
 // ─── Get Course Progress ──────────────────────────────────────────────────────
 
 export async function getCourseProgress(courseId: string, userId: string) {
@@ -485,11 +528,14 @@ export async function getCourseProgress(courseId: string, userId: string) {
   const lessonIds = course.sections.flatMap((s) => s.lessons.map((l) => l.id));
   const totalLessons = lessonIds.length;
 
-  const completedCount = await prisma.lessonProgress.count({
+  const completed = await prisma.lessonProgress.findMany({
     where: { userId, lessonId: { in: lessonIds }, completedAt: { not: null } },
+    select: { lessonId: true },
   });
 
+  const completedLessonIds = completed.map((p) => p.lessonId);
+  const completedCount = completedLessonIds.length;
   const percentage = totalLessons === 0 ? 0 : Math.round((completedCount / totalLessons) * 100);
 
-  return { totalLessons, completedCount, percentage };
+  return { totalLessons, completedCount, percentage, completedLessonIds };
 }

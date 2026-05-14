@@ -14,6 +14,7 @@ export interface CommunityEvent {
   description: string | null
   coverUrl: string | null
   location: string | null
+  callRoomUrl: string | null
   startAt: string
   duration: number | null
   timezone: string

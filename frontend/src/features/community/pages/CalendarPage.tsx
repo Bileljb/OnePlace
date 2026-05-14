@@ -15,7 +15,8 @@ import {
   subMonths,
   parseISO,
 } from 'date-fns'
-import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Trash2, Clock, MapPin } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, List, CalendarDays, Trash2, Clock, MapPin, Video, Users } from 'lucide-react'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { eventApi } from '@/api/event'
@@ -68,15 +69,18 @@ function EventPill({
   event,
   onDelete,
   canDelete,
+  onClick,
 }: {
   event: CommunityEvent
   onDelete: (id: string) => void
   canDelete: boolean
+  onClick: () => void
 }) {
   return (
     <div
+      onClick={onClick}
       className={cn(
-        'group flex items-center justify-between rounded px-1.5 py-0.5 text-[11px] font-medium text-white',
+        'group flex cursor-pointer items-center justify-between rounded px-1.5 py-0.5 text-[11px] font-medium text-white',
         eventColor(event.id),
       )}
     >
@@ -90,6 +94,95 @@ function EventPill({
         </button>
       )}
     </div>
+  )
+}
+
+// ─── Event Detail Modal ───────────────────────────────────────────────────────
+
+function EventDetailModal({
+  event,
+  open,
+  onClose,
+  onDelete,
+  canDelete,
+}: {
+  event: CommunityEvent | null
+  open: boolean
+  onClose: () => void
+  onDelete: (id: string) => void
+  canDelete: boolean
+}) {
+  if (!event) return null
+
+  const time = formatEventTime(event.startAt, event.timezone)
+  const date = format(parseISO(event.startAt), 'EEEE, MMMM d, yyyy')
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-md p-0 overflow-hidden">
+        {/* Cover */}
+        {event.coverUrl && (
+          <img src={event.coverUrl} alt={event.title} className="h-36 w-full object-cover" />
+        )}
+
+        <div className="p-5 space-y-4">
+          {/* Title */}
+          <h2 className="text-lg font-semibold text-foreground">{event.title}</h2>
+
+          {/* Meta */}
+          <div className="space-y-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 shrink-0" />
+              <span>{date}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 shrink-0" />
+              <span>{time}{event.duration ? ` · ${formatDuration(event.duration)}` : ''} ({event.timezone})</span>
+            </div>
+            {event.location && (
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 shrink-0" />
+                <span>{event.location}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 shrink-0" />
+              <span>{event.accessType === 'ALL_MEMBERS' ? 'All members' : 'Paid members only'}</span>
+            </div>
+          </div>
+
+          {/* Description */}
+          {event.description && (
+            <p className="text-sm text-muted-foreground leading-relaxed">{event.description}</p>
+          )}
+
+          {/* Actions */}
+          <div className="flex items-center justify-between pt-1">
+            {event.callRoomUrl ? (
+              <a
+                href={event.callRoomUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                <Video className="h-4 w-4" />
+                Join Call
+              </a>
+            ) : <span />}
+
+            {canDelete && (
+              <button
+                onClick={() => { onDelete(event.id); onClose() }}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </button>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -135,14 +228,27 @@ function EventCard({
         )}
       </div>
 
-      {canDelete && (
-        <button
-          onClick={() => onDelete(event.id)}
-          className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      )}
+      <div className="flex shrink-0 items-center gap-2">
+        {event.callRoomUrl && (
+          <a
+            href={event.callRoomUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            <Video className="h-3.5 w-3.5" />
+            Join Call
+          </a>
+        )}
+        {canDelete && (
+          <button
+            onClick={() => onDelete(event.id)}
+            className="text-muted-foreground transition-colors hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -157,6 +263,7 @@ export function CalendarPage() {
   const [current, setCurrent] = useState(new Date())
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar')
   const [addOpen, setAddOpen] = useState(false)
+  const [selectedEvent, setSelectedEvent] = useState<CommunityEvent | null>(null)
 
   const year = current.getFullYear()
   const month = current.getMonth() + 1
@@ -331,6 +438,7 @@ export function CalendarPage() {
                           event={e}
                           onDelete={(id) => deleteMutation.mutate(id)}
                           canDelete={canManage || e.creatorId === user?.id}
+                          onClick={() => setSelectedEvent(e)}
                         />
                       ))}
                       {dayEvents.length > 3 && (
@@ -367,12 +475,13 @@ export function CalendarPage() {
             </div>
           ) : (
             events.map((e) => (
-              <EventCard
-                key={e.id}
-                event={e}
-                onDelete={(id) => deleteMutation.mutate(id)}
-                canDelete={canManage || e.creatorId === user?.id}
-              />
+              <div key={e.id} onClick={() => setSelectedEvent(e)} className="cursor-pointer">
+                <EventCard
+                  event={e}
+                  onDelete={(id) => deleteMutation.mutate(id)}
+                  canDelete={canManage || e.creatorId === user?.id}
+                />
+              </div>
             ))
           )}
         </div>
@@ -382,6 +491,14 @@ export function CalendarPage() {
         open={addOpen}
         onOpenChange={setAddOpen}
         communityId={communityId!}
+      />
+
+      <EventDetailModal
+        event={selectedEvent}
+        open={!!selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+        onDelete={(id) => deleteMutation.mutate(id)}
+        canDelete={canManage || selectedEvent?.creatorId === user?.id}
       />
     </div>
   )

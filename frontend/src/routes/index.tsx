@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { useAuthStore } from '@/store/auth.store'
 import { AuthGuard } from '@/components/shared/AuthGuard'
 import { SignIn } from '@/features/auth/pages/SignIn'
 import { SignUp } from '@/features/auth/pages/SignUp'
@@ -34,7 +35,9 @@ import { ProfilePage } from '@/features/profile/pages/ProfilePage'
 import { MyCommunitiesPage } from '@/features/profile/pages/MyCommunitiesPage'
 
 function RootRedirect() {
+  const { user } = useAuthStore()
   const lastId = localStorage.getItem('lastCommunityId')
+  if (!user) return <Navigate to="/communities" replace />
   return <Navigate to={lastId ? `/communities/${lastId}/community` : '/communities'} replace />
 }
 
@@ -46,14 +49,41 @@ export const router = createBrowserRouter([
   { path: '/forgot-password', element: <ForgotPassword /> },
   { path: '/reset-password', element: <ResetPassword /> },
 
-  // ── Public community discovery ─────────────────────────────────────────────
+  // ── Public ─────────────────────────────────────────────────────────────────
+  { path: '/', element: <RootRedirect /> },
   { path: '/communities', element: <Discover /> },
+
+  // Community shell — publicly browsable; join requires auth
+  {
+    path: '/communities/:id',
+    element: <CommunityLayout />,
+    children: [
+      { index: true, element: <Navigate to="community" replace /> },
+      { path: 'about', element: <CommunityAboutTab /> },
+      {
+        element: <MemberGuard />,
+        children: [
+          { path: 'community', element: <Feed /> },
+          { path: 'community/posts/:postId', element: <PostDetail /> },
+          { path: 'classroom', element: <Classroom /> },
+          { path: 'calendar', element: <CalendarPage /> },
+          { path: 'leaderboards', element: <LeaderboardPage /> },
+          { path: 'classroom/manage', element: <CourseBuilder /> },
+          { path: 'classroom/manage/:courseId', element: <CourseEditor /> },
+          { path: 'classroom/:courseId', element: <CoursePage /> },
+          { path: 'classroom/:courseId/sections/:sectionId/lessons/:lessonId', element: <CoursePage /> },
+          { path: 'members', element: <Members /> },
+          { path: 'subscription', element: <SubscriptionPage /> },
+          { path: 'analytics', element: <AnalyticsPage /> },
+        ],
+      },
+    ],
+  },
 
   // ── Protected ──────────────────────────────────────────────────────────────
   {
     element: <AuthGuard />,
     children: [
-      { path: '/', element: <RootRedirect /> },
       { path: '/communities/new', element: <CreateCommunity /> },
 
       // Admin panel
@@ -78,7 +108,7 @@ export const router = createBrowserRouter([
         ],
       },
 
-      // Community settings — separate layout, outside community shell
+      // Community settings
       {
         path: '/communities/:id/settings',
         element: <SettingsLayout />,
@@ -87,35 +117,6 @@ export const router = createBrowserRouter([
           { path: 'general', element: <SettingsGeneral /> },
           { path: 'pricing', element: <SettingsPricing /> },
           { path: 'members', element: <SettingsMembers /> },
-        ],
-      },
-
-      // Community shell — CommunityLayout wraps all inner tabs
-      {
-        path: '/communities/:id',
-        element: <CommunityLayout />,
-        children: [
-          { index: true, element: <Navigate to="community" replace /> },
-          // About is always accessible (non-members land here)
-          { path: 'about', element: <CommunityAboutTab /> },
-          // Member-only tabs
-          {
-            element: <MemberGuard />,
-            children: [
-              { path: 'community', element: <Feed /> },
-              { path: 'community/posts/:postId', element: <PostDetail /> },
-              { path: 'classroom', element: <Classroom /> },
-              { path: 'calendar', element: <CalendarPage /> },
-              { path: 'leaderboards', element: <LeaderboardPage /> },
-              { path: 'classroom/manage', element: <CourseBuilder /> },
-              { path: 'classroom/manage/:courseId', element: <CourseEditor /> },
-              { path: 'classroom/:courseId', element: <CoursePage /> },
-              { path: 'classroom/:courseId/sections/:sectionId/lessons/:lessonId', element: <CoursePage /> },
-              { path: 'members', element: <Members /> },
-              { path: 'subscription', element: <SubscriptionPage /> },
-              { path: 'analytics', element: <AnalyticsPage /> },
-            ],
-          },
         ],
       },
     ],

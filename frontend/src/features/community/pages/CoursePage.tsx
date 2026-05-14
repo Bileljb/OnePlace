@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -17,6 +17,7 @@ import {
   FileText,
 } from 'lucide-react'
 import { courseApi } from '@/api/course'
+import { xpToast } from '@/lib/xpToast'
 import type { Course, CourseSection, Lesson, LessonSummary } from '@/types/course'
 import { Button } from '@/components/ui/button'
 import { PurchaseCourseModal } from '../components/PurchaseCourseModal'
@@ -24,15 +25,22 @@ import { RichTextRenderer } from '@/components/shared/RichTextRenderer'
 
 // ─── Video Player ─────────────────────────────────────────────────────────────
 
-function VideoPlayer({ url }: { url: string }) {
+function VideoPlayer({
+  url,
+  savedPosition,
+  onSavePosition,
+}: {
+  url: string
+  savedPosition?: number | null
+  onSavePosition?: (pos: number) => void
+}) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const getEmbedUrl = (u: string) => {
-    // YouTube
     const ytMatch = u.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
     if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}`
-    // Vimeo
     const vimeoMatch = u.match(/vimeo\.com\/(\d+)/)
     if (vimeoMatch) return `https://player.vimeo.com/video/${vimeoMatch[1]}`
-    // Loom
     const loomMatch = u.match(/loom\.com\/share\/([a-zA-Z0-9]+)/)
     if (loomMatch) return `https://www.loom.com/embed/${loomMatch[1]}`
     return null
@@ -55,7 +63,22 @@ function VideoPlayer({ url }: { url: string }) {
 
   return (
     <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black">
-      <video src={url} controls className="h-full w-full" />
+      <video
+        src={url}
+        controls
+        className="h-full w-full"
+        onLoadedMetadata={(e) => {
+          if (savedPosition && savedPosition > 0) {
+            e.currentTarget.currentTime = savedPosition
+          }
+        }}
+        onTimeUpdate={(e) => {
+          if (!onSavePosition) return
+          const pos = Math.floor(e.currentTarget.currentTime)
+          if (timerRef.current) clearTimeout(timerRef.current)
+          timerRef.current = setTimeout(() => onSavePosition(pos), 5000)
+        }}
+      />
     </div>
   )
 }
@@ -175,9 +198,14 @@ function LessonView({
     queryClient.invalidateQueries({ queryKey: ['course-progress', courseId] })
   }
 
+  const { mutate: savePosition } = useMutation({
+    mutationFn: (position: number) =>
+      courseApi.saveVideoPosition(communityId, courseId, sectionId, lesson.id, position),
+  })
+
   const { mutate: markComplete, isPending: completing } = useMutation({
     mutationFn: () => courseApi.markComplete(communityId, courseId, sectionId, lesson.id),
-    onSuccess: () => { invalidate(); toast.success('Lesson completed!') },
+    onSuccess: () => { invalidate(); toast.success('Lesson completed!'); xpToast(10) },
     onError: (err) => toast.error((err as Error).message),
   })
 
@@ -190,7 +218,13 @@ function LessonView({
   return (
     <div className="space-y-6">
       {/* Video */}
-      {lesson.videoUrl && <VideoPlayer url={lesson.videoUrl} />}
+      {lesson.videoUrl && (
+        <VideoPlayer
+          url={lesson.videoUrl}
+          savedPosition={lesson.videoPosition}
+          onSavePosition={(pos) => savePosition(pos)}
+        />
+      )}
 
       {/* Title + complete button */}
       <div className="flex items-start justify-between gap-4">
@@ -381,14 +415,7 @@ export function CoursePage() {
   const lesson = lessonData?.data?.lesson
   const progress = progressData?.data?.progress
 
-  // Derive completed lesson IDs — the backend gives us a count but not IDs.
-  // We track toggled completions locally via query cache optimistically.
-  // For simplicity, a lesson is "completed" if the user just marked it complete this session.
-  // A full solution would need a separate endpoint; for now use the invalidation pattern.
-  const [completedInSession, setCompletedInSession] = useState<Set<string>>(new Set())
-
-  // When markComplete/markIncomplete is called, we update session state
-  const completedIds = completedInSession
+  const completedIds = new Set(progress?.completedLessonIds ?? [])
 
   const errorMsg = (courseError as Error | null)?.message ?? ''
   const isLocked =

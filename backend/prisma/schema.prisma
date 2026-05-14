@@ -20,6 +20,7 @@ model User {
   isSuspended                Boolean     @default(false)
   lastLogin                  DateTime?
   isVerified                 Boolean     @default(false)
+  avatarUrl                  String?
   resetPasswordToken         String?
   resetPasswordExpiresAt     DateTime?
   verificationToken          String?
@@ -379,6 +380,7 @@ model Event {
   description   String?
   coverUrl      String?
   location      String?
+  callRoomUrl   String?
   startAt       DateTime
   duration      Int?
   timezone      String      @default("UTC")

@@ -15,6 +15,7 @@ export async function getProfile(userId: string) {
       lastname: true,
       email: true,
       role: true,
+      avatarUrl: true,
       isVerified: true,
       isSuspended: true,
       lastLogin: true,
@@ -31,7 +32,7 @@ export async function getProfile(userId: string) {
 
 export async function updateProfile(
   userId: string,
-  input: { firstname?: string; lastname?: string; currentPassword?: string; newPassword?: string }
+  input: { firstname?: string; lastname?: string; currentPassword?: string; newPassword?: string; avatarUrl?: string | null }
 ) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new AppError("User not found", 404);
@@ -46,6 +47,10 @@ export async function updateProfile(
   if (input.lastname !== undefined) {
     if (!input.lastname.trim()) throw new AppError("Last name cannot be empty", 400);
     data.lastname = input.lastname.trim();
+  }
+
+  if ("avatarUrl" in input) {
+    data.avatarUrl = input.avatarUrl ?? null;
   }
 
   if (input.newPassword !== undefined) {
@@ -74,6 +79,7 @@ export async function updateProfile(
       lastname: true,
       email: true,
       role: true,
+      avatarUrl: true,
       isVerified: true,
       createdAt: true,
     },
@@ -94,6 +100,7 @@ export async function getUserCommunities(userId: string) {
           id: true,
           name: true,
           description: true,
+          iconUrl: true,
           pricingModel: true,
           platformPlan: true,
           creator: { select: { id: true, firstname: true, lastname: true } },

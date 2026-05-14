@@ -228,6 +228,20 @@ export async function getSubscriptionDetails(
   }
 }
 
+// GET /api/v1/communities/:id/members
+export async function getCommunityMembers(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const members = await communityService.getCommunityMembers(req.params.id as string);
+    res.status(200).json({ success: true, data: { members } });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // GET /api/v1/communities/:communityId/posts  (nested router — param is communityId)
 export async function getCommunityPosts(
   req: Request,
@@ -235,7 +249,8 @@ export async function getCommunityPosts(
   next: NextFunction
 ): Promise<void> {
   try {
-    const posts = await communityService.getCommunityPosts(req.params.communityId as string);
+    const q = req.query.q as string | undefined
+    const posts = await communityService.getCommunityPosts(req.params.communityId as string, q || undefined);
     res.status(200).json({ success: true, data: { posts } });
   } catch (err) {
     next(err);

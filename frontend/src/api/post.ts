@@ -3,9 +3,9 @@ import type { ApiResponse } from '@/types/auth'
 import type { Comment, Post, PostType } from '@/types/post'
 
 export const postApi = {
-  list: (communityId: string) =>
+  list: (communityId: string, q?: string) =>
     api
-      .get<ApiResponse<{ posts: Post[] }>>(`/communities/${communityId}/posts`)
+      .get<ApiResponse<{ posts: Post[] }>>(`/communities/${communityId}/posts`, { params: q ? { q } : undefined })
       .then((r) => r.data),
 
   getById: (communityId: string, postId: string) =>

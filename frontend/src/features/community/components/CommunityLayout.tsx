@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
+import { OnePlaceLogo } from '@/components/shared/OnePlaceLogo'
 import { NavLink, Navigate, Outlet, Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, ChevronLeft } from 'lucide-react'
+import { ChevronDown, ChevronLeft, Trophy } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth.store'
 import { authApi } from '@/api/auth'
 import { communityApi } from '@/api/community'
+import { leaderboardApi } from '@/api/leaderboard'
 import { getMockCommunityDetail, getMockMembership } from '@/mocks/communities.mock'
 import { formatCount, getGradient, getPricingLabel } from '../utils/community.utils'
 import type { CommunityDetail } from '@/types/community'
@@ -65,9 +67,17 @@ function UserMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button className="flex items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-muted focus:outline-none">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
-            {initials}
-          </div>
+          {user.avatarUrl ? (
+            <img
+              src={user.avatarUrl}
+              alt={user.firstname}
+              className="h-7 w-7 rounded-full object-cover"
+            />
+          ) : (
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
+              {initials}
+            </div>
+          )}
           <span className="hidden text-sm font-medium text-foreground sm:block">
             {user.firstname}
           </span>
@@ -99,6 +109,9 @@ function UserMenu() {
 function CommunitySidebar({ community }: { community: CommunityDetail }) {
   const [joinOpen, setJoinOpen] = useState(false)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
+  const { user } = useAuthStore()
+  const navigate = useNavigate()
+  const location = useLocation()
   const isMock = community.id.startsWith('mock-')
 
   const { data: membershipData } = useQuery({
@@ -172,7 +185,17 @@ function CommunitySidebar({ community }: { community: CommunityDetail }) {
 
       {/* Join / Upgrade action */}
       {!isActiveMember && (
-        <Button size="sm" className="mt-4 w-full" onClick={() => setJoinOpen(true)}>
+        <Button
+          size="sm"
+          className="mt-4 w-full"
+          onClick={() => {
+            if (!user) {
+              navigate('/sign-in', { state: { from: location.pathname } })
+              return
+            }
+            setJoinOpen(true)
+          }}
+        >
           Join
         </Button>
       )}
@@ -189,6 +212,81 @@ function CommunitySidebar({ community }: { community: CommunityDetail }) {
 
       <JoinModal open={joinOpen} onOpenChange={setJoinOpen} community={community} />
       <UpgradeModal open={upgradeOpen} onOpenChange={setUpgradeOpen} community={community} />
+    </div>
+  )
+}
+
+// ─── LeaderboardSidebar ───────────────────────────────────────────────────────
+
+const RANK_COLORS = ['text-amber-400', 'text-slate-400', 'text-amber-700']
+const RANK_MEDALS = ['🥇', '🥈', '🥉']
+
+function LeaderboardSidebar({ communityId, isActiveMember }: { communityId: string; isActiveMember: boolean }) {
+  const isMock = communityId.startsWith('mock-')
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['leaderboard', communityId],
+    queryFn: () => leaderboardApi.get(communityId),
+    enabled: !isMock && isActiveMember,
+    staleTime: 60_000,
+  })
+
+  const top5 = data?.data?.leaderboardAllTime?.slice(0, 5) ?? []
+
+  if (!isActiveMember || isMock) return null
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Trophy className="h-4 w-4 text-amber-400" />
+          <span className="text-sm font-semibold text-foreground">Leaderboard</span>
+        </div>
+        <NavLink
+          to={`/communities/${communityId}/leaderboards`}
+          className="text-xs text-primary hover:underline"
+        >
+          View all
+        </NavLink>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-4">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-primary" />
+        </div>
+      ) : top5.length === 0 ? (
+        <p className="py-4 text-center text-xs text-muted-foreground">No points yet. Be the first!</p>
+      ) : (
+        <ol className="space-y-2.5">
+          {top5.map((entry) => {
+            const initials = `${entry.firstname[0]}${entry.lastname[0]}`.toUpperCase()
+            return (
+              <li key={entry.userId} className="flex items-center gap-2">
+                <span className={cn('w-5 shrink-0 text-center text-sm', RANK_COLORS[entry.rank - 1])}>
+                  {entry.rank <= 3 ? RANK_MEDALS[entry.rank - 1] : entry.rank}
+                </span>
+                {entry.avatarUrl ? (
+                  <img
+                    src={entry.avatarUrl}
+                    alt={entry.firstname}
+                    className="h-6 w-6 shrink-0 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white">
+                    {initials}
+                  </div>
+                )}
+                <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                  {entry.firstname} {entry.lastname}
+                </span>
+                <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                  {entry.points} pts
+                </span>
+              </li>
+            )
+          })}
+        </ol>
+      )}
     </div>
   )
 }
@@ -251,7 +349,7 @@ export function CommunityLayout() {
               >
                 <ChevronLeft className="h-4 w-4" />
                 <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary">
-                  <span className="text-[10px] font-bold text-white">O</span>
+                  <OnePlaceLogo className="h-3.5 w-3.5 text-white" />
                 </div>
               </Link>
               <div className="h-5 w-px shrink-0 bg-border" />
@@ -291,8 +389,12 @@ export function CommunityLayout() {
 
           {/* Sidebar */}
           {!hideSidebar && (
-            <aside className="hidden w-72 shrink-0 lg:block">
+            <aside className="hidden w-72 shrink-0 space-y-4 lg:block">
               <CommunitySidebar community={community} />
+              <LeaderboardSidebar
+                communityId={id!}
+                isActiveMember={membershipData?.data?.membership?.status === 'ACTIVE'}
+              />
             </aside>
           )}
         </div>

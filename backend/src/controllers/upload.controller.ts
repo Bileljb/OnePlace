@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { createPresignedUpload, type UploadFolder } from "../services/upload.service.js";
 
-const VALID_FOLDERS: UploadFolder[] = ["courses", "lessons", "attachments", "posts", "communities"];
+const VALID_FOLDERS: UploadFolder[] = ["avatars", "courses", "lessons", "attachments", "posts", "communities"];
 
 // POST /api/v1/upload/presign
 export async function presign(req: Request, res: Response, next: NextFunction): Promise<void> {

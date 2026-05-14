@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { xpToast } from '@/lib/xpToast'
 import { communityApi } from '@/api/community'
 import type { BillingInterval, CommunityDetail } from '@/types/community'
 import {
@@ -33,6 +34,7 @@ export function JoinModal({ open, onOpenChange, community }: JoinModalProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['membership', community.id] })
       toast.success(`Welcome to ${community.name}!`)
+      xpToast(5)
       onOpenChange(false)
       navigate(`/communities/${community.id}/community`)
     },
@@ -81,7 +83,7 @@ export function JoinModal({ open, onOpenChange, community }: JoinModalProps) {
             >
               <p className="text-sm font-medium text-foreground">Yearly</p>
               <p className="mt-1 text-xl font-bold text-foreground">
-                ${pricing.yearlyPrice}
+                ${Number(pricing.yearlyPrice).toFixed(2)}
                 <span className="text-sm font-normal text-muted-foreground">/yr</span>
               </p>
               {pricing.monthlyPrice && pricing.yearlyPrice && (
@@ -110,8 +112,8 @@ export function JoinModal({ open, onOpenChange, community }: JoinModalProps) {
             : community.pricingModel === 'FREE' || community.pricingModel === 'FREEMIUM'
             ? 'Join for free'
             : community.pricingModel === 'ONE_TIME'
-            ? `Buy access — $${pricing?.oneTimePrice}`
-            : `Subscribe — $${billingInterval === 'MONTHLY' ? pricing?.monthlyPrice + '/mo' : pricing?.yearlyPrice + '/yr'}`}
+            ? `Buy access — $${Number(pricing?.oneTimePrice).toFixed(2)}`
+            : `Subscribe — $${billingInterval === 'MONTHLY' ? Number(pricing?.monthlyPrice).toFixed(2) + '/mo' : Number(pricing?.yearlyPrice).toFixed(2) + '/yr'}`}
         </Button>
       </DialogContent>
     </Dialog>

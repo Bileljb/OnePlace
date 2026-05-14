@@ -3,6 +3,7 @@ export interface LeaderboardEntry {
   userId: string
   firstname: string
   lastname: string
+  avatarUrl: string | null
   points: number
 }
 

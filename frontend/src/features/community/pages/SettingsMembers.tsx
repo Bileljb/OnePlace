@@ -56,7 +56,7 @@ function MemberRow({
   const queryClient = useQueryClient()
   const [confirmBan, setConfirmBan] = useState(false)
   const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: ['community-members', communityId] })
+    queryClient.invalidateQueries({ queryKey: ['settings-members', communityId] })
 
   const { mutate: ban, isPending: banning } = useMutation({
     mutationFn: () => membershipApi.ban(communityId, member.userId),
@@ -201,7 +201,7 @@ export function SettingsMembers() {
   })
 
   const { data, isLoading } = useQuery({
-    queryKey: ['community-members', communityId],
+    queryKey: ['settings-members', communityId],
     queryFn: () => membershipApi.getCommunityMembers(communityId!),
     enabled: !!communityId,
   })

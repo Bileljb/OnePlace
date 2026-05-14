@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Pin, MessageSquare, Trash2, Plus, Image, Video, FileText, BarChart2 } from 'lucide-react'
+import { Pin, MessageSquare, Trash2, Plus, Image, Video, FileText, BarChart2, Search, X } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
 import { postApi } from '@/api/post'
@@ -130,12 +130,19 @@ export function Feed() {
   const [createOpen, setCreateOpen] = useState(false)
   const [activeCategory, setActiveCategory] = useState<string>('All')
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null)
+  const [searchInput, setSearchInput] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
 
   const isMock = communityId?.startsWith('mock-')
 
+  useEffect(() => {
+    const t = setTimeout(() => setSearchQuery(searchInput.trim()), 400)
+    return () => clearTimeout(t)
+  }, [searchInput])
+
   const { data, isLoading } = useQuery({
-    queryKey: ['posts', communityId],
-    queryFn: () => postApi.list(communityId!),
+    queryKey: ['posts', communityId, searchQuery],
+    queryFn: () => postApi.list(communityId!, searchQuery || undefined),
     enabled: !!communityId && !isMock,
   })
 
@@ -183,6 +190,27 @@ export function Feed() {
         )}
       </div>
 
+      {/* Search */}
+      {!isMock && (
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={searchInput}
+            onChange={(e) => { setSearchInput(e.target.value); setActiveCategory('All') }}
+            placeholder="Search posts…"
+            className="w-full rounded-lg border border-border bg-muted/40 py-2 pl-9 pr-8 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:bg-background focus:outline-none"
+          />
+          {searchInput && (
+            <button
+              onClick={() => setSearchInput('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
       {isMock && (
         <div className="rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
           This is a demo community. Create a real community to post and interact.
@@ -212,8 +240,17 @@ export function Feed() {
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card py-16 text-center">
           <MessageSquare className="h-9 w-9 text-muted-foreground" />
-          <p className="mt-3 font-semibold text-foreground">No posts yet</p>
-          <p className="mt-1 text-sm text-muted-foreground">Be the first to post something.</p>
+          {searchQuery ? (
+            <>
+              <p className="mt-3 font-semibold text-foreground">No results for "{searchQuery}"</p>
+              <p className="mt-1 text-sm text-muted-foreground">Try a different search term.</p>
+            </>
+          ) : (
+            <>
+              <p className="mt-3 font-semibold text-foreground">No posts yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">Be the first to post something.</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-3">

@@ -69,10 +69,12 @@ export interface Lesson {
   isPublished: boolean
   order: number
   attachments: LessonAttachment[]
+  videoPosition: number | null
 }
 
 export interface CourseProgress {
   totalLessons: number
   completedCount: number
   percentage: number
+  completedLessonIds: string[]
 }

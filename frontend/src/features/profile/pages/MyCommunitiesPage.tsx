@@ -1,9 +1,12 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRight } from 'lucide-react'
 import { userApi } from '@/api/user'
 import { getGradient } from '@/features/community/utils/community.utils'
 import type { UserCommunity } from '@/types/community'
+
+type RoleFilter = 'ALL' | 'CREATOR' | 'MEMBER'
 
 const ROLE_LABELS: Record<string, string> = {
   creator: 'Creator',
@@ -16,6 +19,12 @@ const TIER_LABELS: Record<string, string> = {
   PAID: 'Paid',
 }
 
+const FILTER_TABS: { label: string; value: RoleFilter }[] = [
+  { label: 'All', value: 'ALL' },
+  { label: 'Creator', value: 'CREATOR' },
+  { label: 'Member', value: 'MEMBER' },
+]
+
 function CommunityRow({ item }: { item: UserCommunity }) {
   const gradient = getGradient(item.community.id)
   const isPaidCommunity = item.community.pricingModel !== 'FREE'
@@ -24,11 +33,15 @@ function CommunityRow({ item }: { item: UserCommunity }) {
     <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/30">
       <div className="flex min-w-0 items-center gap-3">
         <div
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${gradient}`}
+          className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg ${item.community.iconUrl ? '' : `bg-gradient-to-br ${gradient}`}`}
         >
-          <span className="text-sm font-bold text-white">
-            {item.community.name.slice(0, 2).toUpperCase()}
-          </span>
+          {item.community.iconUrl ? (
+            <img src={item.community.iconUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span className="text-sm font-bold text-white">
+              {item.community.name.slice(0, 2).toUpperCase()}
+            </span>
+          )}
         </div>
         <div className="min-w-0">
           <p className="truncate font-medium text-foreground">{item.community.name}</p>
@@ -84,12 +97,27 @@ function RowSkeleton() {
 }
 
 export function MyCommunitiesPage() {
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('ALL')
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['my-communities'],
     queryFn: userApi.getMyCommunities,
   })
 
   const communities = data?.data?.communities ?? []
+
+  const counts: Record<RoleFilter, number> = {
+    ALL: communities.length,
+    CREATOR: communities.filter((c) => c.role === 'creator' || c.role === 'admin').length,
+    MEMBER: communities.filter((c) => c.role === 'member').length,
+  }
+
+  const filtered =
+    roleFilter === 'ALL'
+      ? communities
+      : roleFilter === 'CREATOR'
+      ? communities.filter((c) => c.role === 'creator' || c.role === 'admin')
+      : communities.filter((c) => c.role === 'member')
 
   return (
     <div className="space-y-6">
@@ -99,6 +127,36 @@ export function MyCommunitiesPage() {
           Communities you are an active member of.
         </p>
       </div>
+
+      {/* Filter tabs */}
+      {!isLoading && !isError && communities.length > 0 && (
+        <div className="flex items-center gap-1 border-b border-border">
+          {FILTER_TABS.map((tab) => {
+            const isActive = roleFilter === tab.value
+            return (
+              <button
+                key={tab.value}
+                onClick={() => setRoleFilter(tab.value)}
+                className={`relative flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+                  isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {tab.label}
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-xs ${
+                    isActive ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {counts[tab.value]}
+                </span>
+                {isActive && (
+                  <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-primary" />
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       <div className="space-y-3">
         {isError && (
@@ -123,9 +181,15 @@ export function MyCommunitiesPage() {
           </div>
         )}
 
+        {!isLoading && !isError && filtered.length === 0 && communities.length > 0 && (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            No communities in this category.
+          </p>
+        )}
+
         {!isLoading &&
           !isError &&
-          communities.map((item) => <CommunityRow key={item.membershipId} item={item} />)}
+          filtered.map((item) => <CommunityRow key={item.membershipId} item={item} />)}
       </div>
     </div>
   )

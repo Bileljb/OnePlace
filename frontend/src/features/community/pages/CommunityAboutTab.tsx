@@ -46,13 +46,21 @@ export function CommunityAboutTab() {
     <div className="space-y-6">
       {/* Header card */}
       <div className="overflow-hidden rounded-xl border border-border bg-card">
-        <div className={`h-32 w-full bg-gradient-to-br ${gradient}`} />
+        <div className={`h-32 w-full overflow-hidden ${community.coverUrl ? '' : `bg-gradient-to-br ${gradient}`}`}>
+          {community.coverUrl && (
+            <img src={community.coverUrl} alt="" className="h-full w-full object-cover" />
+          )}
+        </div>
         <div className="p-6">
           <div className="-mt-12 mb-4">
             <div
-              className={`flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br ${gradient} border-4 border-card shadow-lg`}
+              className={`flex h-16 w-16 items-center justify-center rounded-xl overflow-hidden border-4 border-card shadow-lg ${community.iconUrl ? '' : `bg-gradient-to-br ${gradient}`}`}
             >
-              <span className="text-xl font-bold text-white">{initials}</span>
+              {community.iconUrl ? (
+                <img src={community.iconUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-xl font-bold text-white">{initials}</span>
+              )}
             </div>
           </div>
           <div className="flex items-start justify-between gap-4">
@@ -138,7 +146,7 @@ export function CommunityAboutTab() {
               {community.pricing.monthlyPrice && (
                 <p>
                   <span className="font-semibold text-foreground">
-                    ${community.pricing.monthlyPrice}
+                    ${Number(community.pricing.monthlyPrice).toFixed(2)}
                   </span>{' '}
                   / month
                 </p>
@@ -146,7 +154,7 @@ export function CommunityAboutTab() {
               {community.pricing.yearlyPrice && (
                 <p>
                   <span className="font-semibold text-foreground">
-                    ${community.pricing.yearlyPrice}
+                    ${Number(community.pricing.yearlyPrice).toFixed(2)}
                   </span>{' '}
                   / year
                 </p>
@@ -154,7 +162,7 @@ export function CommunityAboutTab() {
               {community.pricing.oneTimePrice && (
                 <p>
                   <span className="font-semibold text-foreground">
-                    ${community.pricing.oneTimePrice}
+                    ${Number(community.pricing.oneTimePrice).toFixed(2)}
                   </span>{' '}
                   one-time
                 </p>

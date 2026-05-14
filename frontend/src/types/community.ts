@@ -66,6 +66,7 @@ export interface UserCommunity {
     id: string
     name: string
     description: string | null
+    iconUrl: string | null
     pricingModel: PricingModel
     platformPlan: PlatformPlan
     creator: CommunityCreator
@@ -89,6 +90,19 @@ export interface SubscriptionDetail {
   pricingModel: PricingModel
   subscription: SubscriptionRecord | null
   pricing: CommunityPricing | null
+}
+
+export interface CommunityMember {
+  id: string
+  role: MembershipRole
+  membershipTier: MembershipTier
+  joinedAt: string
+  user: {
+    id: string
+    firstname: string
+    lastname: string
+    avatarUrl: string | null
+  }
 }
 
 export interface MonthDataPoint {

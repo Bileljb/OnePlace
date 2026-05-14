@@ -12,10 +12,12 @@ import {
   createSection,
   updateSection,
   deleteSection,
+  reorderSections,
   createLesson,
   getLesson,
   updateLesson,
   deleteLesson,
+  reorderLessons,
   addAttachment,
   deleteAttachment,
   markLessonComplete,
@@ -37,6 +39,7 @@ courseRouter.get("/:courseId/progress", protect, checkCommunityAccess, getCourse
 
 // ─── Sections ──────────────────────────────────────────────────────────────────
 courseRouter.post("/:courseId/sections", protect, checkCommunityAccess, createSection);
+courseRouter.put("/:courseId/sections/reorder", protect, checkCommunityAccess, reorderSections);
 courseRouter.put("/:courseId/sections/:sectionId", protect, checkCommunityAccess, updateSection);
 courseRouter.delete("/:courseId/sections/:sectionId", protect, checkCommunityAccess, deleteSection);
 
@@ -44,6 +47,10 @@ courseRouter.delete("/:courseId/sections/:sectionId", protect, checkCommunityAcc
 courseRouter.post(
   "/:courseId/sections/:sectionId/lessons",
   protect, checkCommunityAccess, createLesson
+);
+courseRouter.put(
+  "/:courseId/sections/:sectionId/lessons/reorder",
+  protect, checkCommunityAccess, reorderLessons
 );
 courseRouter.get(
   "/:courseId/sections/:sectionId/lessons/:lessonId",
@@ -71,15 +78,15 @@ courseRouter.delete(
 // ─── Progress ──────────────────────────────────────────────────────────────────
 courseRouter.post(
   "/:courseId/sections/:sectionId/lessons/:lessonId/complete",
-  protect, checkCommunityAccess, markLessonComplete
+  protect, checkCommunityAccess, checkCourseAccess, markLessonComplete
 );
 courseRouter.delete(
   "/:courseId/sections/:sectionId/lessons/:lessonId/complete",
-  protect, checkCommunityAccess, markLessonIncomplete
+  protect, checkCommunityAccess, checkCourseAccess, markLessonIncomplete
 );
 courseRouter.patch(
   "/:courseId/sections/:sectionId/lessons/:lessonId/progress",
-  protect, checkCommunityAccess, saveVideoPosition
+  protect, checkCommunityAccess, checkCourseAccess, saveVideoPosition
 );
 
 export default courseRouter;

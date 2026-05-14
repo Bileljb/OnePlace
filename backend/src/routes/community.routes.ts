@@ -26,6 +26,7 @@ import {
   renewSubscription,
   getSubscriptionDetails,
   getCommunityPosts,
+  getCommunityMembers,
 } from "../controllers/community.controller.js";
 import { getCommunityAnalytics } from "../controllers/analytics.controller.js";
 import { getCommunityLeaderboard } from "../controllers/leaderboard.controller.js";
@@ -42,6 +43,7 @@ communityRouter.delete("/:id", protect, deleteCommunity);
 
 // ─── Analytics (creator/admin — enforced in service) ──────────────────────────
 communityRouter.get("/:id/analytics", protect, getCommunityAnalytics);
+communityRouter.get("/:id/members", protect, checkCommunityAccess, getCommunityMembers);
 
 // ─── Dashboard configuration (creator only — enforced in service) ──────────────
 communityRouter.put("/:id/pricing", protect, configurePricing);

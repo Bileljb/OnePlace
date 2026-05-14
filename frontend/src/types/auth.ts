@@ -4,6 +4,7 @@ export interface User {
   lastname: string
   email: string
   role: 'USER' | 'ADMIN' | 'moderator'
+  avatarUrl?: string | null
   emailVerified: boolean
   createdAt: string
 }

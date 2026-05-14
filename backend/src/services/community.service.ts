@@ -397,15 +397,46 @@ export async function upgradeFreemiumMember(communityId: string, userId: string)
   return updatedMembership;
 }
 
+// ─── Get Community Members ────────────────────────────────────────────────────
+
+export async function getCommunityMembers(communityId: string) {
+  const community = await prisma.community.findUnique({ where: { id: communityId } });
+  if (!community) throw new AppError("Community not found", 404);
+
+  return prisma.membership.findMany({
+    where: { communityId, status: "ACTIVE" },
+    select: {
+      id: true,
+      role: true,
+      membershipTier: true,
+      joinedAt: true,
+      user: {
+        select: { id: true, firstname: true, lastname: true, avatarUrl: true },
+      },
+    },
+    orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
+  });
+}
+
 // ─── Get Community Posts ───────────────────────────────────────────────────────
 // Posts are public to all active members — no tier-based gating on the forum.
 
-export async function getCommunityPosts(communityId: string) {
+export async function getCommunityPosts(communityId: string, q?: string) {
   const community = await prisma.community.findUnique({ where: { id: communityId } });
   if (!community) throw new AppError("Community not found", 404);
 
   return prisma.post.findMany({
-    where: { communityId },
+    where: {
+      communityId,
+      ...(q
+        ? {
+            OR: [
+              { title: { contains: q, mode: "insensitive" } },
+              { content: { contains: q, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    },
     orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
     include: {
       author: { select: { id: true, firstname: true, lastname: true } },
@@ -427,6 +458,9 @@ export async function listCommunities() {
       description: true,
       pricingModel: true,
       platformPlan: true,
+      isPrivate: true,
+      coverUrl: true,
+      iconUrl: true,
       createdAt: true,
       creator: { select: { id: true, firstname: true, lastname: true } },
       _count: { select: { memberships: true } },

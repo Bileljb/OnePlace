@@ -84,7 +84,7 @@ export function CourseFormModal({ open, onOpenChange, communityId, course }: Cou
     if (!file) return
     setUploading(true)
     try {
-      const url = await uploadFile(file)
+      const url = await uploadFile(file, 'courses')
       setThumbnail(url)
     } catch (err) {
       toast.error((err as Error).message ?? 'Upload failed')

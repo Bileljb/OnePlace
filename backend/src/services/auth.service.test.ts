@@ -69,6 +69,7 @@ function makeUser(overrides: Record<string, unknown> = {}) {
     updatedAt: new Date("2024-01-01"),
     verificationToken: null,
     verificationTokenExpiresAt: null,
+    avatarUrl: null,
     resetPasswordToken: null,
     resetPasswordExpiresAt: null,
     ...overrides,

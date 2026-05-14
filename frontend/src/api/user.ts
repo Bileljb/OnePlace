@@ -9,6 +9,7 @@ export const userApi = {
   updateMe: (data: {
     firstname?: string
     lastname?: string
+    avatarUrl?: string | null
     currentPassword?: string
     newPassword?: string
   }) =>

@@ -54,7 +54,18 @@ const TIMEZONES = [
   'Australia/Sydney',
 ]
 
-const LOCATIONS = ['Online', 'In-person', 'Zoom', 'Google Meet', 'Microsoft Teams']
+const LOCATION_TYPES = [
+  { value: 'oneplace', label: 'OnePlace Call' },
+  { value: 'zoom',     label: 'Zoom' },
+  { value: 'meet',     label: 'Google Meet' },
+  { value: 'address',  label: 'Address' },
+]
+
+const LOCATION_PLACEHOLDERS: Record<string, string> = {
+  zoom:    'Paste Zoom meeting link…',
+  meet:    'Paste Google Meet link…',
+  address: 'Enter the address…',
+}
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -85,6 +96,7 @@ export function AddEventModal({ open, onOpenChange, communityId }: Props) {
   const queryClient = useQueryClient()
   const [coverUrl, setCoverUrl] = useState<string | null>(null)
   const [uploadingCover, setUploadingCover] = useState(false)
+  const [locationLink, setLocationLink] = useState('')
 
   const today = format(new Date(), 'yyyy-MM-dd')
   const guessedTz = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -114,6 +126,7 @@ export function AddEventModal({ open, onOpenChange, communityId }: Props) {
 
   const title = watch('title')
   const description = watch('description') ?? ''
+  const locationType = watch('location') ?? ''
 
   const create = useMutation({
     mutationFn: (data: FormValues) => {
@@ -122,7 +135,11 @@ export function AddEventModal({ open, onOpenChange, communityId }: Props) {
         title: data.title,
         description: data.description || undefined,
         coverUrl: coverUrl ?? undefined,
-        location: data.location || undefined,
+        location: data.location === 'oneplace'
+          ? 'OnePlace Call'
+          : data.location
+            ? locationLink.trim() || undefined
+            : undefined,
         startAt,
         duration: data.duration,
         timezone: data.timezone,
@@ -136,6 +153,7 @@ export function AddEventModal({ open, onOpenChange, communityId }: Props) {
       toast.success('Event created')
       reset()
       setCoverUrl(null)
+      setLocationLink('')
       onOpenChange(false)
     },
     onError: (err: Error) => toast.error(err.message),
@@ -158,6 +176,7 @@ export function AddEventModal({ open, onOpenChange, communityId }: Props) {
   function handleClose() {
     reset()
     setCoverUrl(null)
+    setLocationLink('')
     onOpenChange(false)
   }
 
@@ -256,10 +275,24 @@ export function AddEventModal({ open, onOpenChange, communityId }: Props) {
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
             >
               <option value="">Select location</option>
-              {LOCATIONS.map((l) => (
-                <option key={l} value={l}>{l}</option>
+              {LOCATION_TYPES.map((l) => (
+                <option key={l.value} value={l.value}>{l.label}</option>
               ))}
             </select>
+            {locationType && locationType !== 'oneplace' && (
+              <input
+                type="text"
+                value={locationLink}
+                onChange={(e) => setLocationLink(e.target.value)}
+                placeholder={LOCATION_PLACEHOLDERS[locationType]}
+                className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            )}
+            {locationType === 'oneplace' && (
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                A OnePlace Call room will be generated automatically when the event starts.
+              </p>
+            )}
           </div>
 
           {/* Description */}

@@ -1,26 +1,39 @@
-import { api } from './client'
+import { api } from '@/api/client'
 import type { ApiResponse } from '@/types/auth'
 
-export type UploadFolder = 'courses' | 'lessons' | 'attachments' | 'posts' | 'communities'
+export type UploadFolder = 'avatars' | 'courses' | 'lessons' | 'attachments' | 'posts' | 'communities'
+
+interface PresignResponse {
+  uploadUrl: string
+  fileUrl: string
+  maxSize: number
+  expiresIn: number
+}
 
 export const uploadApi = {
   presign: (data: { filename: string; contentType: string; folder: UploadFolder }) =>
     api
-      .post<ApiResponse<{ uploadUrl: string; fileUrl: string }>>('/upload/presign', data)
+      .post<ApiResponse<PresignResponse>>('/upload/presign', data)
       .then((r) => r.data),
 }
 
-export async function uploadFile(file: File, folder: UploadFolder = 'courses'): Promise<string> {
-  const result = await uploadApi.presign({
-    filename: file.name,
-    contentType: file.type,
-    folder,
-  })
-  if (!result.data) throw new Error('Failed to get presigned URL')
-  await fetch(result.data.uploadUrl, {
+export async function uploadFile(file: File, folder: UploadFolder): Promise<string> {
+  const res = await uploadApi.presign({ filename: file.name, contentType: file.type, folder })
+  const { uploadUrl, fileUrl, maxSize } = res.data!
+
+  if (file.size > maxSize) {
+    throw new Error(`File is too large. Maximum size is ${Math.round(maxSize / 1024 / 1024)} MB.`)
+  }
+
+  const uploadRes = await fetch(uploadUrl, {
     method: 'PUT',
     body: file,
     headers: { 'Content-Type': file.type },
   })
-  return result.data.fileUrl
+
+  if (!uploadRes.ok) {
+    throw new Error('Upload to storage failed. Please try again.')
+  }
+
+  return fileUrl
 }

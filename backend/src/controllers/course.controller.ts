@@ -159,7 +159,7 @@ export async function createLesson(req: Request, res: Response, next: NextFuncti
 // GET /api/v1/communities/:communityId/courses/:courseId/sections/:sectionId/lessons/:lessonId
 export async function getLesson(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const lesson = await courseService.getLesson(req.params.lessonId as string);
+    const lesson = await courseService.getLesson(req.params.lessonId as string, req.user?.id);
     res.status(200).json({ success: true, data: { lesson } });
   } catch (err) {
     next(err);
@@ -233,6 +233,36 @@ export async function markLessonIncomplete(req: Request, res: Response, next: Ne
   try {
     await courseService.markLessonIncomplete(req.params.lessonId as string, req.user!.id);
     res.status(200).json({ success: true, message: "Lesson marked incomplete." });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// PUT /api/v1/communities/:communityId/courses/:courseId/sections/reorder
+export async function reorderSections(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { orderedIds } = req.body as { orderedIds: string[] };
+    if (!Array.isArray(orderedIds)) {
+      res.status(400).json({ success: false, message: "orderedIds must be an array" });
+      return;
+    }
+    await courseService.reorderSections(req.params.courseId as string, req.user!.id, orderedIds);
+    res.status(200).json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// PUT /api/v1/communities/:communityId/courses/:courseId/sections/:sectionId/lessons/reorder
+export async function reorderLessons(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { orderedIds } = req.body as { orderedIds: string[] };
+    if (!Array.isArray(orderedIds)) {
+      res.status(400).json({ success: false, message: "orderedIds must be an array" });
+      return;
+    }
+    await courseService.reorderLessons(req.params.sectionId as string, req.user!.id, orderedIds);
+    res.status(200).json({ success: true });
   } catch (err) {
     next(err);
   }

@@ -30,13 +30,13 @@ function PricingSection({ community }: { community: CommunityDetail }) {
           <span>
             {pricing?.monthlyPrice && (
               <span className="mr-3">
-                <span className="text-2xl font-bold text-foreground">${pricing.monthlyPrice}</span>
+                <span className="text-2xl font-bold text-foreground">${Number(pricing.monthlyPrice).toFixed(2)}</span>
                 <span className="text-muted-foreground">/mo</span>
               </span>
             )}
             {pricing?.yearlyPrice && (
               <span>
-                <span className="text-xl font-semibold text-foreground">${pricing.yearlyPrice}</span>
+                <span className="text-xl font-semibold text-foreground">${Number(pricing.yearlyPrice).toFixed(2)}</span>
                 <span className="text-muted-foreground">/yr</span>
               </span>
             )}
@@ -44,7 +44,7 @@ function PricingSection({ community }: { community: CommunityDetail }) {
         )}
         {pricingModel === 'ONE_TIME' && pricing?.oneTimePrice && (
           <span>
-            <span className="text-2xl font-bold text-foreground">${pricing.oneTimePrice}</span>
+            <span className="text-2xl font-bold text-foreground">${Number(pricing.oneTimePrice).toFixed(2)}</span>
             <span className="text-muted-foreground"> one-time</span>
           </span>
         )}
@@ -128,16 +128,24 @@ export function CommunityAbout() {
       <PublicNav />
 
       {/* Banner */}
-      <div className={`h-56 w-full bg-gradient-to-br ${communityGradient}`} />
+      <div className={`h-56 w-full overflow-hidden ${community.coverUrl ? '' : `bg-gradient-to-br ${communityGradient}`}`}>
+        {community.coverUrl && (
+          <img src={community.coverUrl} alt="" className="h-full w-full object-cover" />
+        )}
+      </div>
 
       {/* Main content */}
       <div className="mx-auto max-w-4xl px-4 pb-20">
         {/* Avatar row */}
         <div className="-mt-12 flex items-end justify-between">
           <div
-            className={`flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${communityGradient} border-4 border-background shadow-xl`}
+            className={`flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl overflow-hidden border-4 border-background shadow-xl ${community.iconUrl ? '' : `bg-gradient-to-br ${communityGradient}`}`}
           >
-            <span className="text-3xl font-bold text-white">{initials}</span>
+            {community.iconUrl ? (
+              <img src={community.iconUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-3xl font-bold text-white">{initials}</span>
+            )}
           </div>
 
           <div className="mb-1">

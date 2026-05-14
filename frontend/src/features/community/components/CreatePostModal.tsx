@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BarChart2, Link2, Paperclip, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { xpToast } from '@/lib/xpToast'
 import { postApi } from '@/api/post'
 import { communityApi } from '@/api/community'
 import { useAuthStore } from '@/store/auth.store'
@@ -69,6 +70,7 @@ export function CreatePostModal({ open, onOpenChange, communityId }: CreatePostM
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['posts', communityId] })
       toast.success('Post published')
+      xpToast(5)
       resetForm()
       onOpenChange(false)
     },
