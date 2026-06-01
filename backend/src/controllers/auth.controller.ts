@@ -6,7 +6,7 @@ const COOKIE_NAME = "token";
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: NODE_ENV === "production",
-  sameSite: "strict" as const,
+  sameSite: (NODE_ENV === "production" ? "none" : "strict") as "none" | "strict",
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 
@@ -42,7 +42,7 @@ export async function signIn(req: Request, res: Response, next: NextFunction): P
 // POST /api/v1/auth/sign-out
 export async function signOut(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    res.clearCookie(COOKIE_NAME, { httpOnly: true, sameSite: "strict" });
+    res.clearCookie(COOKIE_NAME, COOKIE_OPTIONS);
     res.status(200).json({ success: true, message: "Logged out successfully." });
   } catch (err) {
     next(err);
