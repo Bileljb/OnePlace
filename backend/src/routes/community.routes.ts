@@ -7,9 +7,12 @@ import {
   createPost,
   getPostById,
   deletePost,
+  togglePinPost,
   createComment,
   getPostComments,
   deleteComment,
+  likePost,
+  unlikePost,
 } from "../controllers/post.controller.js";
 import {
   listCommunities,
@@ -27,6 +30,8 @@ import {
   getSubscriptionDetails,
   getCommunityPosts,
   getCommunityMembers,
+  addCommunityMedia,
+  deleteCommunityMedia,
 } from "../controllers/community.controller.js";
 import { getCommunityAnalytics } from "../controllers/analytics.controller.js";
 import { getCommunityLeaderboard } from "../controllers/leaderboard.controller.js";
@@ -44,6 +49,10 @@ communityRouter.delete("/:id", protect, deleteCommunity);
 // ─── Analytics (creator/admin — enforced in service) ──────────────────────────
 communityRouter.get("/:id/analytics", protect, getCommunityAnalytics);
 communityRouter.get("/:id/members", protect, checkCommunityAccess, getCommunityMembers);
+
+// ─── Media gallery (creator only — enforced in service) ───────────────────────
+communityRouter.post("/:id/media", protect, addCommunityMedia);
+communityRouter.delete("/:id/media/:mediaId", protect, deleteCommunityMedia);
 
 // ─── Dashboard configuration (creator only — enforced in service) ──────────────
 communityRouter.put("/:id/pricing", protect, configurePricing);
@@ -70,7 +79,11 @@ const postRouter = Router({ mergeParams: true });
 postRouter.get("/", protect, checkCommunityAccess, getCommunityPosts);
 postRouter.post("/", protect, checkCommunityAccess, createPost);
 postRouter.get("/:postId", protect, checkCommunityAccess, getPostById);
-postRouter.delete("/:postId", protect, deletePost);
+postRouter.delete("/:postId", protect, deletePost)
+postRouter.patch("/:postId/pin", protect, togglePinPost);
+
+postRouter.post("/:postId/like", protect, likePost);
+postRouter.delete("/:postId/like", protect, unlikePost);
 
 postRouter.get("/:postId/comments", protect, checkCommunityAccess, getPostComments);
 postRouter.post("/:postId/comments", protect, checkCommunityAccess, createComment);

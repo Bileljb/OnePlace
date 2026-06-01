@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner'
 import { courseApi } from '@/api/course'
 import { uploadFile } from '@/api/upload'
+import { aiApi } from '@/api/ai'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { TiptapEditor } from '@/components/shared/TiptapEditor'
@@ -59,6 +60,7 @@ export function LessonPanel({
   const [attachments, setAttachments] = useState<LessonAttachment[]>([])
   const [error, setError] = useState('')
   const [editorKey, setEditorKey] = useState<string>(lessonId ?? 'new')
+  const [transcribing, setTranscribing] = useState(false)
 
   // ADD dropdown panels
   const [showLinkField, setShowLinkField] = useState(false)
@@ -241,7 +243,29 @@ export function LessonPanel({
       <TiptapEditor
         content={content}
         onChange={setContent}
-        onVideoAdd={(url) => setVideoUrl(url)}
+        onVideoAdd={async (url, generateTranscript) => {
+          setVideoUrl(url)
+          if (!generateTranscript) return
+          setShowTranscriptField(true)
+          setTranscribing(true)
+          try {
+            const result = await aiApi.transcribeVideo(url)
+            const { transcript: text, source } = result.data!
+            if (text) {
+              setTranscript(text)
+              const label = source === 'youtube_captions' ? 'YouTube captions' : 'AI (Whisper)'
+              toast.success(`Transcript generated via ${label}`)
+            } else {
+              toast.error('No transcript available for this video type (Loom/Vimeo not supported).')
+              setShowTranscriptField(false)
+            }
+          } catch {
+            toast.error('Transcript generation failed.')
+            setShowTranscriptField(false)
+          } finally {
+            setTranscribing(false)
+          }
+        }}
         resetKey={editorKey}
         className="flex-1 overflow-hidden"
       />
@@ -251,13 +275,20 @@ export function LessonPanel({
         <div className="border-t border-border px-4 py-3">
           <div className="flex items-start gap-2">
             <FileText className="mt-2 h-4 w-4 shrink-0 text-muted-foreground" />
-            <textarea
-              value={transcript}
-              onChange={(e) => setTranscript(e.target.value)}
-              placeholder="Paste or type lesson transcript…"
-              rows={4}
-              className="flex-1 resize-y rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+            {transcribing ? (
+              <div className="flex flex-1 items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Generating transcript…
+              </div>
+            ) : (
+              <textarea
+                value={transcript}
+                onChange={(e) => setTranscript(e.target.value)}
+                placeholder="Paste or type lesson transcript…"
+                rows={4}
+                className="flex-1 resize-y rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            )}
             <button
               type="button"
               onClick={() => { setShowTranscriptField(false); setTranscript('') }}

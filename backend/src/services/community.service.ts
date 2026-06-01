@@ -153,27 +153,38 @@ export async function joinCommunity(
   const existing = await prisma.membership.findUnique({
     where: { userId_communityId: { userId, communityId } },
   });
-  if (existing) throw new AppError("You are already a member of this community", 409);
+
+  if (existing?.status === "ACTIVE") {
+    throw new AppError("You are already a member of this community", 409);
+  }
+  if (existing?.status === "BANNED") {
+    throw new AppError("You have been banned from this community", 403);
+  }
+  // If EXPIRED or CANCELLED, existing membership will be reactivated below
 
   let membership;
   switch (community.pricingModel) {
     case "FREE":
-      membership = await joinFree(communityId, userId);
+      membership = existing
+        ? await prisma.membership.update({ where: { id: existing.id }, data: { status: "ACTIVE" } })
+        : await joinFree(communityId, userId);
       break;
 
     case "FREEMIUM":
-      membership = await joinFreemium(communityId, userId);
+      membership = existing
+        ? await prisma.membership.update({ where: { id: existing.id }, data: { status: "ACTIVE" } })
+        : await joinFreemium(communityId, userId);
       break;
 
     case "SUBSCRIPTION":
       if (!billingInterval) {
         throw new AppError("billingInterval (MONTHLY | YEARLY) is required", 400);
       }
-      membership = await joinSubscription(community, userId, billingInterval);
+      membership = await joinSubscription(community, userId, billingInterval, existing?.id);
       break;
 
     case "ONE_TIME":
-      membership = await joinOneTime(community, userId);
+      membership = await joinOneTime(community, userId, existing?.id);
       break;
 
     default:
@@ -226,7 +237,8 @@ async function joinFreemium(communityId: string, userId: string) {
 async function joinSubscription(
   community: Community & { pricing: CommunityPricing | null },
   userId: string,
-  billingInterval: BillingInterval
+  billingInterval: BillingInterval,
+  existingMembershipId?: string
 ) {
   if (!community.pricing) {
     throw new AppError("This community has not configured pricing yet", 400);
@@ -257,27 +269,37 @@ async function joinSubscription(
       ? new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
       : new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
 
-  const membership = await prisma.membership.create({
-    data: {
-      userId,
-      communityId: community.id,
-      role: "member",
-      status: "ACTIVE",
-      pricingModelAtJoin: "SUBSCRIPTION",
-      membershipTier: "PAID",
-      subscriptions: {
-        create: {
-          externalId: result.subscriptionId,
-          billingInterval,
-          subscriptionStart: now,
-          subscriptionEnd,
-          pricePaid: amount,
-          paymentStatus: "SUCCESS",
+  const newSub = {
+    externalId: result.subscriptionId,
+    billingInterval,
+    subscriptionStart: now,
+    subscriptionEnd,
+    pricePaid: amount,
+    paymentStatus: "SUCCESS" as const,
+  };
+
+  const membership = existingMembershipId
+    ? await prisma.membership.update({
+        where: { id: existingMembershipId },
+        data: {
+          status: "ACTIVE",
+          membershipTier: "PAID",
+          subscriptions: { create: newSub },
         },
-      },
-    },
-    include: { subscriptions: true },
-  });
+        include: { subscriptions: true },
+      })
+    : await prisma.membership.create({
+        data: {
+          userId,
+          communityId: community.id,
+          role: "member",
+          status: "ACTIVE",
+          pricingModelAtJoin: "SUBSCRIPTION",
+          membershipTier: "PAID",
+          subscriptions: { create: newSub },
+        },
+        include: { subscriptions: true },
+      });
 
   if (user) {
     await sendPaymentConfirmationEmail(user.email, user.firstname, community.name, amount, billingInterval);
@@ -288,7 +310,8 @@ async function joinSubscription(
 
 async function joinOneTime(
   community: Community & { pricing: CommunityPricing | null },
-  userId: string
+  userId: string,
+  existingMembershipId?: string
 ) {
   if (!community.pricing) {
     throw new AppError("This community has not configured pricing yet", 400);
@@ -306,26 +329,36 @@ async function joinOneTime(
 
   const result = paymentService.createPaymentIntent(community.id, userId, amount);
 
-  const membership = await prisma.membership.create({
-    data: {
-      userId,
-      communityId: community.id,
-      role: "member",
-      status: "ACTIVE",
-      pricingModelAtJoin: "ONE_TIME",
-      membershipTier: "PAID",
-      subscriptions: {
-        create: {
-          externalId: result.paymentIntentId,
-          subscriptionStart: new Date(),
-          subscriptionEnd: null, // no expiry for one-time payments
-          pricePaid: amount,
-          paymentStatus: "SUCCESS",
+  const newSub = {
+    externalId: result.paymentIntentId,
+    subscriptionStart: new Date(),
+    subscriptionEnd: null as null,
+    pricePaid: amount,
+    paymentStatus: "SUCCESS" as const,
+  };
+
+  const membership = existingMembershipId
+    ? await prisma.membership.update({
+        where: { id: existingMembershipId },
+        data: {
+          status: "ACTIVE",
+          membershipTier: "PAID",
+          subscriptions: { create: newSub },
         },
-      },
-    },
-    include: { subscriptions: true },
-  });
+        include: { subscriptions: true },
+      })
+    : await prisma.membership.create({
+        data: {
+          userId,
+          communityId: community.id,
+          role: "member",
+          status: "ACTIVE",
+          pricingModelAtJoin: "ONE_TIME",
+          membershipTier: "PAID",
+          subscriptions: { create: newSub },
+        },
+        include: { subscriptions: true },
+      });
 
   if (user) {
     await sendPaymentConfirmationEmail(user.email, user.firstname, community.name, amount);
@@ -421,51 +454,78 @@ export async function getCommunityMembers(communityId: string) {
 // ─── Get Community Posts ───────────────────────────────────────────────────────
 // Posts are public to all active members — no tier-based gating on the forum.
 
-export async function getCommunityPosts(communityId: string, q?: string) {
+export async function getCommunityPosts(communityId: string, userId?: string, q?: string, page = 1, limit = 30) {
   const community = await prisma.community.findUnique({ where: { id: communityId } });
   if (!community) throw new AppError("Community not found", 404);
 
-  return prisma.post.findMany({
-    where: {
-      communityId,
-      ...(q
-        ? {
-            OR: [
-              { title: { contains: q, mode: "insensitive" } },
-              { content: { contains: q, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
-    include: {
-      author: { select: { id: true, firstname: true, lastname: true } },
-      _count: { select: { comments: true } },
-    },
-  });
+  const where = {
+    communityId,
+    ...(q
+      ? {
+          OR: [
+            { title: { contains: q, mode: "insensitive" as const } },
+            { content: { contains: q, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+
+  const [posts, total] = await Promise.all([
+    prisma.post.findMany({
+      where,
+      orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
+      skip: (page - 1) * limit,
+      take: limit,
+      include: {
+        author: { select: { id: true, firstname: true, lastname: true } },
+        _count: { select: { comments: true, likes: true } },
+        ...(userId ? { likes: { where: { userId }, select: { id: true } } } : {}),
+      },
+    }),
+    prisma.post.count({ where }),
+  ]);
+
+  return {
+    posts: posts.map((p) => ({
+      ...p,
+      likedByMe: userId ? (p as any).likes?.length > 0 : false,
+      likes: undefined,
+    })),
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
 }
 
 // ─── List Communities ──────────────────────────────────────────────────────────
 // Public endpoint — returns all non-private communities with basic info.
 
-export async function listCommunities() {
-  return prisma.community.findMany({
-    where: { isPrivate: false },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      pricingModel: true,
-      platformPlan: true,
-      isPrivate: true,
-      coverUrl: true,
-      iconUrl: true,
-      createdAt: true,
-      creator: { select: { id: true, firstname: true, lastname: true } },
-      _count: { select: { memberships: true } },
-    },
-  });
+export async function listCommunities(page = 1, limit = 30) {
+  const where = { isPrivate: false };
+  const [communities, total] = await Promise.all([
+    prisma.community.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        pricingModel: true,
+        platformPlan: true,
+        isPrivate: true,
+        coverUrl: true,
+        iconUrl: true,
+        createdAt: true,
+        creator: { select: { id: true, firstname: true, lastname: true } },
+        _count: { select: { memberships: true } },
+      },
+    }),
+    prisma.community.count({ where }),
+  ]);
+  return { communities, total, page, limit, totalPages: Math.ceil(total / limit) };
 }
 
 // ─── Get My Membership ────────────────────────────────────────────────────────
@@ -491,12 +551,58 @@ export async function getCommunityById(communityId: string) {
     include: {
       pricing: true,
       creator: { select: { id: true, firstname: true, lastname: true } },
+      media: { orderBy: { order: "asc" } },
       _count: { select: { memberships: true, posts: true } },
     },
   });
 
   if (!community) throw new AppError("Community not found", 404);
   return community;
+}
+
+// ─── Add Community Media ───────────────────────────────────────────────────────
+// Creator only. Appends a media item (image URL or video URL) to the gallery.
+
+export async function addCommunityMedia(
+  communityId: string,
+  requesterId: string,
+  input: { url: string; type: "IMAGE" | "VIDEO"; thumbnailUrl?: string | null }
+) {
+  await assertCreator(communityId, requesterId);
+
+  const last = await prisma.communityMedia.findFirst({
+    where: { communityId },
+    orderBy: { order: "desc" },
+    select: { order: true },
+  });
+
+  return prisma.communityMedia.create({
+    data: {
+      communityId,
+      url: input.url,
+      type: input.type,
+      thumbnailUrl: input.thumbnailUrl ?? null,
+      order: (last?.order ?? -1) + 1,
+    },
+  });
+}
+
+// ─── Delete Community Media ────────────────────────────────────────────────────
+// Creator only. Removes a media item by ID.
+
+export async function deleteCommunityMedia(
+  communityId: string,
+  requesterId: string,
+  mediaId: string
+) {
+  await assertCreator(communityId, requesterId);
+
+  const item = await prisma.communityMedia.findFirst({
+    where: { id: mediaId, communityId },
+  });
+  if (!item) throw new AppError("Media item not found", 404);
+
+  await prisma.communityMedia.delete({ where: { id: mediaId } });
 }
 
 // ─── Update Community ──────────────────────────────────────────────────────────

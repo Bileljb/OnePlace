@@ -185,103 +185,178 @@ function Divider() {
   return <div className="mx-1 h-4 w-px shrink-0 bg-border" />
 }
 
+// ─── Progress circle ──────────────────────────────────────────────────────────
+
+function ProgressCircle({ percent }: { percent: number }) {
+  const r = 22
+  const circumference = 2 * Math.PI * r
+  const offset = circumference - (percent / 100) * circumference
+  return (
+    <div className="relative flex items-center justify-center">
+      <svg width="60" height="60" viewBox="0 0 60 60" className="-rotate-90">
+        <circle cx="30" cy="30" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="4" />
+        <circle
+          cx="30" cy="30" r={r} fill="none"
+          stroke="hsl(var(--primary))" strokeWidth="4"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          className="transition-[stroke-dashoffset] duration-150"
+        />
+      </svg>
+      <span className="absolute text-xs font-semibold text-foreground">{percent}%</span>
+    </div>
+  )
+}
+
 // ─── Video modal ──────────────────────────────────────────────────────────────
 
 function VideoModal({
   onConfirm,
   onClose,
 }: {
-  onConfirm: (url: string) => void
+  onConfirm: (url: string, generateTranscript: boolean) => void
   onClose: () => void
 }) {
   const [url, setUrl] = useState('')
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [progress, setProgress] = useState(0)
   const [dragging, setDragging] = useState(false)
+  const [generateTranscript, setGenerateTranscript] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   function handleConfirm() {
     const trimmed = url.trim()
     if (!trimmed) return
-    onConfirm(trimmed)
+    onConfirm(trimmed, generateTranscript)
     onClose()
+  }
+
+  async function handleFile(file: File) {
+    if (!file.type.startsWith('video/')) {
+      toast.error('Please select a video file.')
+      return
+    }
+    setUploading(true)
+    setProgress(0)
+    try {
+      const fileUrl = await uploadFile(file, 'lessons', setProgress)
+      onConfirm(fileUrl, generateTranscript)
+      onClose()
+    } catch (err) {
+      toast.error((err as Error).message || 'Video upload failed.')
+    } finally {
+      setUploading(false)
+      setProgress(0)
+    }
   }
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
+      onClick={(e) => { if (e.target === e.currentTarget && !uploading) onClose() }}
     >
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-xl font-bold text-foreground">Add a video</h2>
           <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            onClick={() => { if (!uploading) onClose() }}
+            disabled={uploading}
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 focus-within:ring-2 focus-within:ring-ring">
+        <div className={cn(
+          'flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 focus-within:ring-2 focus-within:ring-ring',
+          uploading && 'pointer-events-none opacity-50',
+        )}>
           <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleConfirm()
-            }}
-            placeholder="YouTube, Loom, Vimeo, or Wistia link"
+            onKeyDown={(e) => { if (e.key === 'Enter') handleConfirm() }}
+            placeholder="YouTube, Loom, Vimeo, or direct link"
             autoFocus
+            disabled={uploading}
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
           />
         </div>
 
         <div
-          onDragOver={(e) => {
-            e.preventDefault()
-            setDragging(true)
-          }}
+          onDragOver={(e) => { e.preventDefault(); if (!uploading) setDragging(true) }}
           onDragLeave={() => setDragging(false)}
           onDrop={(e) => {
             e.preventDefault()
             setDragging(false)
+            const file = e.dataTransfer.files[0]
+            if (file && !uploading) handleFile(file)
           }}
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => { if (!uploading) fileInputRef.current?.click() }}
           className={cn(
             'mt-3 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed py-10 transition-colors',
-            dragging
-              ? 'border-primary bg-primary/5'
-              : 'border-border hover:border-muted-foreground/40 hover:bg-muted/30',
+            uploading
+              ? 'cursor-default border-border'
+              : dragging
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:border-muted-foreground/40 hover:bg-muted/30',
           )}
         >
-          <Upload className="h-6 w-6 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">Drag and drop video here</p>
-          <span className="text-sm text-muted-foreground underline underline-offset-2">
-            or select file
-          </span>
+          {uploading ? (
+            <>
+              <ProgressCircle percent={progress} />
+              <p className="text-sm text-muted-foreground">Uploading video…</p>
+            </>
+          ) : (
+            <>
+              <Upload className="h-6 w-6 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Drag and drop video here</p>
+              <span className="text-sm text-muted-foreground underline underline-offset-2">or select file</span>
+            </>
+          )}
           <input
             ref={fileInputRef}
             type="file"
             accept="video/*"
             className="hidden"
-            onChange={() => {}}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) handleFile(file)
+              e.target.value = ''
+            }}
           />
         </div>
 
+        <label className={cn(
+          'mt-4 flex cursor-pointer items-center gap-2.5',
+          uploading && 'pointer-events-none opacity-50',
+        )}>
+          <input
+            type="checkbox"
+            checked={generateTranscript}
+            onChange={(e) => setGenerateTranscript(e.target.checked)}
+            disabled={uploading}
+            className="h-4 w-4 rounded border-border accent-primary"
+          />
+          <span className="text-sm text-foreground">Generate transcript</span>
+          <span className="text-xs text-muted-foreground">YouTube captions or AI</span>
+        </label>
+
         <div className="mt-5 flex items-center justify-end gap-3">
           <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+            onClick={() => { if (!uploading) onClose() }}
+            disabled={uploading}
+            className="px-4 py-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
           >
             Cancel
           </button>
           <button
             onClick={handleConfirm}
-            disabled={!url.trim()}
+            disabled={!url.trim() || uploading}
             className={cn(
               'rounded-lg px-5 py-2 text-sm font-semibold uppercase tracking-wide transition-colors',
-              url.trim()
+              url.trim() && !uploading
                 ? 'bg-muted text-foreground hover:bg-muted/70'
                 : 'cursor-not-allowed bg-muted/40 text-muted-foreground',
             )}
@@ -299,7 +374,7 @@ function VideoModal({
 interface TiptapEditorProps {
   content: string
   onChange: (html: string) => void
-  onVideoAdd?: (url: string) => void
+  onVideoAdd?: (url: string, generateTranscript: boolean) => void
   resetKey?: string | number
   className?: string
 }
@@ -348,10 +423,10 @@ export function TiptapEditor({
     editor!.chain().focus().setLink({ href: url }).run()
   }
 
-  function handleVideoConfirm(url: string) {
+  function handleVideoConfirm(url: string, generateTranscript: boolean) {
     editor!.chain().focus().insertContent({ type: 'videoEmbed', attrs: { src: url } }).run()
     setHasVideo(true)
-    onVideoAdd?.(url)
+    onVideoAdd?.(url, generateTranscript)
   }
 
   async function handleImageFileChange(e: React.ChangeEvent<HTMLInputElement>) {

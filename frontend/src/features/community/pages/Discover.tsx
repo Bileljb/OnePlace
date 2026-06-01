@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { PublicNav } from '@/components/shared/PublicNav'
 import { CommunityCard } from '../components/CommunityCard'
 import { communityApi } from '@/api/community'
+import { Pagination } from '@/components/ui/pagination'
 
 function CardSkeleton() {
   return (
@@ -27,9 +28,15 @@ function CardSkeleton() {
 
 export function Discover() {
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
 
-  const { data, isLoading, isError } = useQuery({ queryKey: ['communities'], queryFn: communityApi.list })
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['communities', page],
+    queryFn: () => communityApi.list(page, 30),
+  })
+
   const communities = data?.data?.communities ?? []
+  const totalPages = data?.data?.totalPages ?? 1
 
   const filtered = search.trim()
     ? communities.filter(
@@ -38,6 +45,11 @@ export function Discover() {
           c.description?.toLowerCase().includes(search.toLowerCase()),
       )
     : communities
+
+  function handleSearch(value: string) {
+    setSearch(value)
+    setPage(1)
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -60,7 +72,7 @@ export function Discover() {
           <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearch(e.target.value)}
             placeholder="Search for anything"
             className="w-full rounded-full border border-border bg-muted py-3 pl-12 pr-5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 focus:ring-offset-background"
           />
@@ -92,8 +104,14 @@ export function Discover() {
         {!isLoading && !isError && filtered.length > 0 && (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((community, i) => (
-              <CommunityCard key={community.id} community={community} rank={i + 1} />
+              <CommunityCard key={community.id} community={community} rank={(page - 1) * 30 + i + 1} />
             ))}
+          </div>
+        )}
+
+        {!isLoading && !isError && !search && (
+          <div className="mt-10">
+            <Pagination page={page} totalPages={totalPages} onChange={(p) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
           </div>
         )}
       </div>

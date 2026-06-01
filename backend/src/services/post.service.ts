@@ -3,6 +3,16 @@ import { AppError } from "../utils/AppError.js";
 import type { PostType } from "@prisma/client";
 import { createNotification } from "./notification.service.js";
 import { addPoints } from "./points.service.js";
+import { getEmbedding } from "./embedding.service.js";
+
+async function embedPost(postId: string, title: string, content: string) {
+  try {
+    const embedding = await getEmbedding(`${title}\n${content}`);
+    await prisma.post.update({ where: { id: postId }, data: { embedding } });
+  } catch (err) {
+    console.error(`[embedding] Post ${postId}:`, err);
+  }
+}
 
 // ─── Create Post ───────────────────────────────────────────────────────────────
 // Any active member can post.
@@ -40,6 +50,9 @@ export async function createPost(
     },
   });
 
+  // Generate semantic embedding (fire-and-forget — doesn't block the response)
+  embedPost(post.id, post.title, post.content);
+
   // Award XP for creating a post (fire-and-forget)
   addPoints(authorId, communityId, "POST_CREATED").catch(() => {});
 
@@ -70,17 +83,56 @@ export async function createPost(
 
 // ─── Get Post By ID ────────────────────────────────────────────────────────────
 
-export async function getPostById(postId: string) {
+export async function getPostById(postId: string, userId?: string) {
   const post = await prisma.post.findUnique({
     where: { id: postId },
     include: {
       author: { select: { id: true, firstname: true, lastname: true } },
-      _count: { select: { comments: true } },
+      _count: { select: { comments: true, likes: true } },
+      ...(userId ? { likes: { where: { userId }, select: { id: true } } } : {}),
     },
   });
 
   if (!post) throw new AppError("Post not found", 404);
-  return post;
+
+  return {
+    ...post,
+    likedByMe: userId ? (post as any).likes?.length > 0 : false,
+    likes: undefined,
+  };
+}
+
+// ─── Like / Unlike Post ────────────────────────────────────────────────────────
+
+export async function likePost(postId: string, userId: string) {
+  await prisma.postLike.createMany({
+    data: [{ postId, userId }],
+    skipDuplicates: true,
+  });
+}
+
+export async function unlikePost(postId: string, userId: string) {
+  await prisma.postLike.deleteMany({ where: { postId, userId } });
+}
+
+// ─── Toggle Pin Post ───────────────────────────────────────────────────────────
+// Community creator only. Pinned posts float to the top of the feed.
+
+export async function togglePinPost(postId: string, requesterId: string) {
+  const post = await prisma.post.findUnique({
+    where: { id: postId },
+    include: { community: { select: { creatorId: true } } },
+  });
+
+  if (!post) throw new AppError("Post not found", 404);
+  if (post.community.creatorId !== requesterId) {
+    throw new AppError("Only the community creator can pin posts", 403);
+  }
+
+  return prisma.post.update({
+    where: { id: postId },
+    data: { isPinned: !post.isPinned },
+  });
 }
 
 // ─── Delete Post ───────────────────────────────────────────────────────────────

@@ -1,7 +1,10 @@
 import { useParams } from 'react-router-dom'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { TrendingUp, Users, DollarSign } from 'lucide-react'
+import { TrendingUp, Users, DollarSign, Sparkles, AlertTriangle, Download, SmilePlus } from 'lucide-react'
+import { toast } from 'sonner'
 import { communityApi } from '@/api/community'
+import { aiApi, type ChurnMember, type AnalyticsSummaryData, type SentimentData } from '@/api/ai'
 import type { MonthDataPoint } from '@/types/community'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -143,6 +146,272 @@ function AnalyticsSkeleton() {
   )
 }
 
+
+// ─── AI Summary Card ──────────────────────────────────────────────────────────
+
+function AISummaryCard({ communityId }: { communityId: string }) {
+  const { data, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ['ai-analytics-summary', communityId],
+    queryFn: () => aiApi.getAnalyticsSummary(communityId),
+    enabled: false,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const summary = data?.data as AnalyticsSummaryData | undefined
+
+  function downloadCSV() {
+    if (!summary) return
+    const d = summary.data
+    const rows = [
+      ['Metric', 'Value'],
+      ['Total members', d.totalMembers],
+      ['Active members', d.activeMembers],
+      ['New this month', d.newThisMonth],
+      ['New last month', d.newLastMonth],
+      ['Growth %', `${d.growthPct}%`],
+      ['Revenue this month', `$${d.revenueThisMonth.toFixed(2)}`],
+      ['Revenue last month', `$${d.revenueLastMonth.toFixed(2)}`],
+      ['Total revenue', `$${d.totalRevenue.toFixed(2)}`],
+      ['Posts this month', d.postsThisMonth],
+      ['Comments this month', d.commentsThisMonth],
+      ['Likes this month', d.likesThisMonth],
+    ]
+    const csv = rows.map((r) => r.join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `analytics-${communityId}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <p className="text-sm font-semibold text-foreground">AI Analytics Summary</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {summary && (
+            <button
+              onClick={downloadCSV}
+              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
+            </button>
+          )}
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 hover:opacity-90"
+          >
+            {isFetching ? 'Generating...' : summary ? 'Regenerate' : 'Generate summary'}
+          </button>
+        </div>
+      </div>
+
+      {isFetching && (
+        <div className="space-y-2 animate-pulse">
+          <div className="h-3.5 w-full rounded bg-muted" />
+          <div className="h-3.5 w-5/6 rounded bg-muted" />
+          <div className="h-3.5 w-4/6 rounded bg-muted" />
+        </div>
+      )}
+
+      {summary && !isFetching && (
+        <p className="text-sm leading-relaxed text-muted-foreground">{summary.summary}</p>
+      )}
+
+      {!summary && !isFetching && (
+        <p className="text-xs text-muted-foreground">
+          Click "Generate summary" to get an AI-written overview of this month's performance.
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ─── Churn Risk Card ──────────────────────────────────────────────────────────
+
+function ChurnRiskCard({ communityId }: { communityId: string }) {
+  const { data, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ['churn-risk', communityId],
+    queryFn: () => aiApi.getChurnRisk(communityId),
+    enabled: false,
+    staleTime: 10 * 60 * 1000,
+  })
+
+  const churn = data?.data as { atRisk: ChurnMember[]; summary: string } | undefined
+
+  const riskColor = (level: string) =>
+    level === 'high'
+      ? 'bg-red-500/10 text-red-600 border-red-200'
+      : 'bg-amber-500/10 text-amber-600 border-amber-200'
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-amber-500" />
+          <p className="text-sm font-semibold text-foreground">Churn Risk</p>
+        </div>
+        <button
+          onClick={() => refetch()}
+          disabled={isFetching}
+          className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 hover:opacity-90"
+        >
+          {isFetching ? 'Analyzing...' : churn ? 'Refresh' : 'Analyze members'}
+        </button>
+      </div>
+
+      {isFetching && (
+        <div className="space-y-2 animate-pulse">
+          {[1, 2, 3].map((i) => <div key={i} className="h-10 rounded bg-muted" />)}
+        </div>
+      )}
+
+      {churn && !isFetching && (
+        <>
+          <p className="text-sm text-muted-foreground leading-relaxed">{churn.summary}</p>
+          {churn.atRisk.length > 0 ? (
+            <div className="space-y-2">
+              {churn.atRisk.map((m) => (
+                <div
+                  key={m.userId}
+                  className={`flex items-center justify-between rounded-lg border p-3 ${riskColor(m.riskLevel)}`}
+                >
+                  <div>
+                    <p className="text-sm font-medium">{m.name}</p>
+                    <p className="text-xs opacity-70">
+                      {m.posts} posts · {m.comments} comments in 30 days
+                      {m.expiringIn7Days && ' · sub expiring'}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold capitalize">
+                    {m.riskLevel}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-emerald-600">No at-risk members detected.</p>
+          )}
+        </>
+      )}
+
+      {!churn && !isFetching && (
+        <p className="text-xs text-muted-foreground">
+          Click "Analyze members" to identify members at risk of churning based on engagement signals.
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ─── Sentiment Card ───────────────────────────────────────────────────────────
+
+function SentimentCard({ communityId }: { communityId: string }) {
+  const { data, refetch, isFetching } = useQuery({
+    queryKey: ['ai-sentiment', communityId],
+    queryFn: () => aiApi.getSentiment(communityId),
+    enabled: false,
+    staleTime: 15 * 60 * 1000,
+  })
+
+  const sentiment = data?.data as SentimentData | undefined
+
+  const overallColor =
+    sentiment?.overall === 'positive'
+      ? 'text-emerald-600'
+      : sentiment?.overall === 'negative'
+      ? 'text-red-500'
+      : 'text-amber-500'
+
+  const barColor = (key: keyof SentimentData['breakdown']) =>
+    key === 'positive' ? 'bg-emerald-500' : key === 'negative' ? 'bg-red-400' : 'bg-amber-400'
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <SmilePlus className="h-4 w-4 text-primary" />
+          <p className="text-sm font-semibold text-foreground">Community Sentiment</p>
+        </div>
+        <button
+          onClick={() => refetch()}
+          disabled={isFetching}
+          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 hover:opacity-90"
+        >
+          {isFetching ? 'Analyzing...' : sentiment ? 'Refresh' : 'Analyze'}
+        </button>
+      </div>
+
+      {isFetching && (
+        <div className="space-y-2 animate-pulse">
+          <div className="h-3.5 w-1/3 rounded bg-muted" />
+          <div className="h-2 w-full rounded bg-muted" />
+          <div className="h-2 w-full rounded bg-muted" />
+          <div className="h-2 w-full rounded bg-muted" />
+        </div>
+      )}
+
+      {sentiment && !isFetching && (
+        <>
+          <div className="flex items-center gap-2">
+            <span className={`text-lg font-bold capitalize ${overallColor}`}>
+              {sentiment.overall}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              · {sentiment.postCount} posts analyzed
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {(['positive', 'neutral', 'negative'] as const).map((key) => (
+              <div key={key}>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="capitalize text-muted-foreground">{key}</span>
+                  <span className="font-medium text-foreground">{sentiment.breakdown[key]}%</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-muted">
+                  <div
+                    className={`h-1.5 rounded-full ${barColor(key)}`}
+                    style={{ width: `${sentiment.breakdown[key]}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {sentiment.themes.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {sentiment.themes.map((t) => (
+                <span
+                  key={t}
+                  className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs text-foreground/80"
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <p className="text-sm leading-relaxed text-muted-foreground">{sentiment.summary}</p>
+        </>
+      )}
+
+      {!sentiment && !isFetching && (
+        <p className="text-xs text-muted-foreground">
+          Click "Analyze" to get an AI sentiment breakdown of your community's recent posts.
+        </p>
+      )}
+    </div>
+  )
+}
+
 // ─── AnalyticsPage ────────────────────────────────────────────────────────────
 
 export function AnalyticsPage() {
@@ -262,6 +531,11 @@ export function AnalyticsPage() {
           </div>
         )}
       </div>
+
+      {/* AI Features */}
+      <AISummaryCard communityId={id!} />
+      <ChurnRiskCard communityId={id!} />
+      <SentimentCard communityId={id!} />
     </div>
   )
 }

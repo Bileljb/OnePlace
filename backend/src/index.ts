@@ -9,6 +9,8 @@ import communityRouter from './routes/community.routes.js';
 import adminRouter from './routes/admin.routes.js';
 import uploadRouter from './routes/upload.routes.js';
 import notificationRouter from './routes/notification.routes.js';
+import aiRouter from './routes/ai.routes.js';
+import knowledgeRouter from './routes/knowledge.routes.js';
 import { startExpiryJob } from './jobs/expiry.job.js';
 import errorMiddleware from './middlewares/error.middleware.js';
 import { connectDB, disconnectDB } from './database/db.js';
@@ -29,6 +31,8 @@ app.use('/api/v1/communities', communityRouter)
 app.use('/api/v1/admin', adminRouter)
 app.use('/api/v1/upload', uploadRouter)
 app.use('/api/v1/notifications', notificationRouter)
+app.use('/api/v1/ai', aiRouter)
+app.use('/api/v1/communities/:communityId/knowledge', knowledgeRouter)
 app.use(errorMiddleware)
 
 app.get("/", (req, res)=>{ res.send("hello")})

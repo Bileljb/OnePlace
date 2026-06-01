@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { OnePlaceLogo } from '@/components/shared/OnePlaceLogo'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { NotificationBell } from '@/components/shared/NotificationBell'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -86,7 +87,10 @@ export function PublicNav() {
 
         <div className="flex items-center gap-2">
           {user ? (
-            <UserMenu />
+            <>
+              <NotificationBell />
+              <UserMenu />
+            </>
           ) : (
             <>
               <Link to="/sign-in">

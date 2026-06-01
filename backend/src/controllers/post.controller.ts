@@ -19,7 +19,37 @@ export async function createPost(req: Request, res: Response, next: NextFunction
 // GET /api/v1/communities/:communityId/posts/:postId
 export async function getPostById(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const post = await postService.getPostById(req.params.postId as string);
+    const post = await postService.getPostById(req.params.postId as string, req.user?.id);
+    res.status(200).json({ success: true, data: { post } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// POST /api/v1/communities/:communityId/posts/:postId/like
+export async function likePost(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    await postService.likePost(req.params.postId as string, req.user!.id);
+    res.status(200).json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// DELETE /api/v1/communities/:communityId/posts/:postId/like
+export async function unlikePost(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    await postService.unlikePost(req.params.postId as string, req.user!.id);
+    res.status(200).json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// PATCH /api/v1/communities/:communityId/posts/:postId/pin
+export async function togglePinPost(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const post = await postService.togglePinPost(req.params.postId as string, req.user!.id);
     res.status(200).json({ success: true, data: { post } });
   } catch (err) {
     next(err);

@@ -29,6 +29,7 @@ async function sendExpiryReminders(now: Date): Promise<void> {
   const upcoming = await prisma.membership.findMany({
     where: {
       status: "ACTIVE",
+      role: "member", // creators and admins never receive expiry reminders
       community: { pricingModel: "SUBSCRIPTION" },
       subscriptions: {
         some: {
@@ -74,12 +75,23 @@ async function sendExpiryReminders(now: Date): Promise<void> {
 export async function runExpiryJob(): Promise<void> {
   const now = new Date();
 
+  // Heal any creator/admin memberships that were wrongly set to EXPIRED before
+  // the role filter was added to this job.
+  const healed = await prisma.membership.updateMany({
+    where: { role: { in: ["creator", "admin"] }, status: "EXPIRED" },
+    data: { status: "ACTIVE" },
+  });
+  if (healed.count > 0) {
+    console.log(`[expiry-job] Reactivated ${healed.count} creator/admin membership(s) that were wrongly expired`);
+  }
+
   // Load all ACTIVE memberships in SUBSCRIPTION communities.
   // Fetching the latest subscription per membership lets us decide in JS
   // rather than writing a complex subquery, which is acceptable for V0.
   const activeMemberships = await prisma.membership.findMany({
     where: {
       status: "ACTIVE",
+      role: "member", // creators and admins are never subject to expiry
       community: { pricingModel: "SUBSCRIPTION" },
     },
     select: {

@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BarChart2, Link2, Paperclip, X } from 'lucide-react'
+import { BarChart2, Link2, Paperclip, Sparkles, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { aiApi } from '@/api/ai'
 import { xpToast } from '@/lib/xpToast'
 import { postApi } from '@/api/post'
 import { communityApi } from '@/api/community'
@@ -36,6 +37,10 @@ export function CreatePostModal({ open, onOpenChange, communityId }: CreatePostM
   const [showLinkPanel, setShowLinkPanel] = useState(false)
   const [linkInput, setLinkInput] = useState('')
 
+  // AI assist
+  const [showAIMenu, setShowAIMenu] = useState(false)
+  const [aiLoading, setAILoading] = useState(false)
+
   // Poll
   const [showPoll, setShowPoll] = useState(false)
   const [pollOptions, setPollOptions] = useState(['', '', ''])
@@ -58,8 +63,12 @@ export function CreatePostModal({ open, onOpenChange, communityId }: CreatePostM
       return { content: JSON.stringify(payload), type: 'TEXT' }
     }
     const type: PostType = mediaType === 'image' ? 'IMAGE' : mediaType === 'video' ? 'VIDEO' : 'TEXT'
-    const content = textContent.trim() || mediaUrl
-    return { content, type }
+    if (mediaUrl) {
+      const payload: Record<string, unknown> = { mediaUrl, mediaType }
+      if (textContent.trim()) payload.text = textContent.trim()
+      return { content: JSON.stringify(payload), type }
+    }
+    return { content: textContent.trim(), type: 'TEXT' }
   }
 
   const { mutate: create, isPending } = useMutation({
@@ -77,6 +86,25 @@ export function CreatePostModal({ open, onOpenChange, communityId }: CreatePostM
     onError: (err) => toast.error((err as Error).message),
   })
 
+  async function handleAIAssist(action: 'improve' | 'fix_grammar' | 'expand') {
+    const target = textContent.trim() || title.trim()
+    if (!target) { toast.error('Write something first'); return }
+    setShowAIMenu(false)
+    setAILoading(true)
+    try {
+      const res = await aiApi.postAssist(textContent.trim() || title.trim(), action)
+      const improved = res.data?.improved
+      if (improved) {
+        if (textContent.trim()) setTextContent(improved)
+        else setTitle(improved)
+      }
+    } catch {
+      toast.error('AI assist failed')
+    } finally {
+      setAILoading(false)
+    }
+  }
+
   function resetForm() {
     setTitle('')
     setTextContent('')
@@ -88,6 +116,7 @@ export function CreatePostModal({ open, onOpenChange, communityId }: CreatePostM
     setLinkInput('')
     setShowPoll(false)
     setPollOptions(['', '', ''])
+    setShowAIMenu(false)
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -320,6 +349,40 @@ export function CreatePostModal({ open, onOpenChange, communityId }: CreatePostM
                 >
                   <BarChart2 className="h-4 w-4" />
                 </button>
+
+                {/* AI assist */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    title="AI assist"
+                    disabled={aiLoading}
+                    onClick={() => setShowAIMenu((v) => !v)}
+                    className={`rounded-md p-1.5 transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40 ${showAIMenu ? 'bg-muted text-primary' : 'text-muted-foreground'}`}
+                  >
+                    {aiLoading
+                      ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-primary" />
+                      : <Sparkles className="h-4 w-4" />
+                    }
+                  </button>
+                  {showAIMenu && (
+                    <div className="absolute bottom-full left-0 mb-1 w-44 rounded-lg border border-border bg-card shadow-lg z-10">
+                      {([
+                        { action: 'improve', label: 'Improve wording' },
+                        { action: 'fix_grammar', label: 'Fix grammar' },
+                        { action: 'expand', label: 'Expand idea' },
+                      ] as const).map(({ action, label }) => (
+                        <button
+                          key={action}
+                          type="button"
+                          onClick={() => handleAIAssist(action)}
+                          className="w-full px-3 py-2 text-left text-xs text-foreground hover:bg-muted first:rounded-t-lg last:rounded-b-lg"
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Actions */}

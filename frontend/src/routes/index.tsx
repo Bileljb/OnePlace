@@ -20,6 +20,7 @@ import { CommunityAboutTab } from '@/features/community/pages/CommunityAboutTab'
 import { SettingsGeneral } from '@/features/community/pages/SettingsGeneral'
 import { SettingsPricing } from '@/features/community/pages/SettingsPricing'
 import { SettingsMembers } from '@/features/community/pages/SettingsMembers'
+import { SettingsKnowledge } from '@/features/community/pages/SettingsKnowledge'
 import { CourseBuilder } from '@/features/community/pages/CourseBuilder'
 import { CourseEditor } from '@/features/community/pages/CourseEditor'
 import { SubscriptionPage } from '@/features/community/pages/SubscriptionPage'
@@ -117,6 +118,7 @@ export const router = createBrowserRouter([
           { path: 'general', element: <SettingsGeneral /> },
           { path: 'pricing', element: <SettingsPricing /> },
           { path: 'members', element: <SettingsMembers /> },
+          { path: 'knowledge', element: <SettingsKnowledge /> },
         ],
       },
     ],

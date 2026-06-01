@@ -18,7 +18,8 @@ export interface Post {
   createdAt: string
   updatedAt: string
   author: PostAuthor
-  _count: { comments: number }
+  _count: { comments: number; likes: number }
+  likedByMe: boolean
 }
 
 export interface Comment {

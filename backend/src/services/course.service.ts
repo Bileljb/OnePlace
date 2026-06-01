@@ -2,6 +2,13 @@ import { prisma } from "../database/db.js";
 import { AppError } from "../utils/AppError.js";
 import type { AttachmentType, CourseAccessType } from "@prisma/client";
 import { addPoints } from "./points.service.js";
+import { getEmbedding } from "./embedding.service.js";
+
+function embedLesson(lessonId: string, title: string, transcript: string) {
+  getEmbedding(`${title}\n${transcript}`)
+    .then((embedding) => prisma.lesson.update({ where: { id: lessonId }, data: { embedding } }))
+    .catch((err) => console.error("[embed] Lesson embedding failed:", err));
+}
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -299,7 +306,7 @@ export async function createLesson(
     select: { order: true },
   });
 
-  return prisma.lesson.create({
+  const lesson = await prisma.lesson.create({
     data: {
       sectionId,
       title: input.title.trim(),
@@ -313,6 +320,12 @@ export async function createLesson(
     },
     include: { attachments: true },
   });
+
+  if (input.transcript?.trim()) {
+    embedLesson(lesson.id, lesson.title, input.transcript.trim());
+  }
+
+  return lesson;
 }
 
 // ─── Get Lesson ────────────────────────────────────────────────────────────────
@@ -360,7 +373,7 @@ export async function updateLesson(
 
   await requireCreatorOrAdmin(lesson.section.course.communityId, requesterId);
 
-  return prisma.lesson.update({
+  const updated = await prisma.lesson.update({
     where: { id: lessonId },
     data: {
       ...(input.title !== undefined && { title: input.title.trim() }),
@@ -374,6 +387,13 @@ export async function updateLesson(
     },
     include: { attachments: true },
   });
+
+  const newTranscript = input.transcript?.trim();
+  if (newTranscript && newTranscript !== lesson.transcript) {
+    embedLesson(lessonId, updated.title, newTranscript);
+  }
+
+  return updated;
 }
 
 // ─── Delete Lesson ─────────────────────────────────────────────────────────────

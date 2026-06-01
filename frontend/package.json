@@ -27,6 +27,7 @@
     "@tiptap/pm": "^3.22.4",
     "@tiptap/react": "^3.22.4",
     "@tiptap/starter-kit": "^3.22.4",
+    "@vidstack/react": "^1.12.13",
     "axios": "^1.8.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

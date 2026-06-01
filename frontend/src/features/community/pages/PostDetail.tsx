@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Trash2, MessageSquare, Pin, Image, Video, FileText, Send } from 'lucide-react'
+import { ArrowLeft, Trash2, MessageSquare, Pin, Send, Heart } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
 import { xpToast } from '@/lib/xpToast'
@@ -10,12 +10,6 @@ import { useAuthStore } from '@/store/auth.store'
 import type { Comment } from '@/types/post'
 import { Button } from '@/components/ui/button'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
-
-const TYPE_ICON = {
-  TEXT: FileText,
-  IMAGE: Image,
-  VIDEO: Video,
-}
 
 interface PollData {
   options: string[]
@@ -32,6 +26,20 @@ function parsePoll(content: string): PollData | null {
   } catch {
     return null
   }
+}
+
+interface MediaData { mediaUrl: string; mediaType: 'image' | 'video'; text?: string }
+
+function parseMedia(content: string): MediaData | null {
+  try {
+    const data = JSON.parse(content)
+    if (data?.mediaUrl && data?.mediaType) return data as MediaData
+  } catch {}
+  // Legacy: plain URL stored directly as content
+  if (content.startsWith('http://') || content.startsWith('https://')) {
+    return { mediaUrl: content, mediaType: 'image' }
+  }
+  return null
 }
 
 // ─── CommentItem ──────────────────────────────────────────────────────────────
@@ -144,6 +152,33 @@ export function PostDetail() {
     },
   })
 
+  const { mutate: toggleLike } = useMutation({
+    mutationFn: () =>
+      post?.likedByMe
+        ? postApi.unlike(communityId!, postId!)
+        : postApi.like(communityId!, postId!),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['post', postId] })
+      const previous = queryClient.getQueryData(['post', postId])
+      queryClient.setQueryData(['post', postId], (old: any) => {
+        if (!old?.data?.post) return old
+        const p = old.data.post
+        return {
+          ...old,
+          data: {
+            ...old.data,
+            post: { ...p, likedByMe: !p.likedByMe, _count: { ...p._count, likes: p._count.likes + (p.likedByMe ? -1 : 1) } },
+          },
+        }
+      })
+      return { previous }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(['post', postId], ctx.previous)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['post', postId] }),
+  })
+
   const post = postData?.data?.post
   const comments = commentsData?.data?.comments ?? []
 
@@ -163,7 +198,6 @@ export function PostDetail() {
     )
   }
 
-  const TypeIcon = TYPE_ICON[post.type]
   const initials = `${post.author.firstname[0]}${post.author.lastname[0]}`.toUpperCase()
   const canDeletePost = user?.id === post.authorId
 
@@ -244,30 +278,46 @@ export function PostDetail() {
               </div>
             )
           }
-          if (post.type === 'IMAGE') {
-            return <img src={post.content} alt={post.title} className="w-full rounded-lg object-cover" />
-          }
-          if (post.type === 'VIDEO') {
-            return <video src={post.content} controls className="w-full rounded-lg" />
+          if (post.type === 'IMAGE' || post.type === 'VIDEO') {
+            const media = parseMedia(post.content)
+            if (media) {
+              return (
+                <div className="space-y-3">
+                  {media.text && (
+                    <p className="leading-relaxed text-foreground/90 whitespace-pre-wrap">{media.text}</p>
+                  )}
+                  {post.type === 'IMAGE'
+                    ? <img src={media.mediaUrl} alt={post.title} className="max-h-[600px] w-full rounded-lg object-cover" />
+                    : <video src={media.mediaUrl} controls className="w-full rounded-lg" />
+                  }
+                </div>
+              )
+            }
+            return <p className="leading-relaxed text-foreground/90 whitespace-pre-wrap">{post.content}</p>
           }
           return <p className="leading-relaxed text-foreground/90 whitespace-pre-wrap">{post.content}</p>
         })()}
 
         {/* Meta */}
         <div className="mt-4 flex items-center gap-3 border-t border-border pt-4">
-          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-            <TypeIcon className="h-3.5 w-3.5" />
-            {post.type}
-          </span>
           {post.category && (
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground/70">
               {post.category}
             </span>
           )}
-          <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-            <MessageSquare className="h-3.5 w-3.5" />
-            {comments.length} comment{comments.length !== 1 ? 's' : ''}
-          </span>
+          <div className="ml-auto flex items-center gap-4 text-sm text-muted-foreground">
+            <button
+              onClick={toggleLike}
+              className={`flex items-center gap-1.5 transition-colors hover:text-rose-500 ${post.likedByMe ? 'text-rose-500' : ''}`}
+            >
+              <Heart className={`h-4 w-4 ${post.likedByMe ? 'fill-rose-500' : ''}`} />
+              <span>{post._count.likes}</span>
+            </button>
+            <span className="flex items-center gap-1.5">
+              <MessageSquare className="h-4 w-4" />
+              {comments.length} comment{comments.length !== 1 ? 's' : ''}
+            </span>
+          </div>
         </div>
       </div>
 

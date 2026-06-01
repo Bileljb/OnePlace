@@ -93,6 +93,7 @@ export const MOCK_COMMUNITY_DETAIL: CommunityDetail = {
     oneTimePrice: null,
     upgradePrice: null,
   },
+  media: [],
   _count: { memberships: 3241, posts: 874 },
 }
 
@@ -120,6 +121,7 @@ export function getMockCommunityDetail(id: string): CommunityDetail | undefined 
     isPrivate: false,
     updatedAt: item.createdAt,
     pricing: null,
+    media: [],
     _count: { memberships: item._count.memberships, posts: 0 },
   }
 }

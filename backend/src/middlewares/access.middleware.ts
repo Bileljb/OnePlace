@@ -49,6 +49,16 @@ export async function checkCommunityAccess(
       return next(new AppError("You are not an active member of this community", 403));
     }
 
+    // Creators and admins always have full access regardless of subscription state
+    if (membership.role === "creator" || membership.role === "admin") {
+      req.communityMembership = {
+        id: membership.id,
+        membershipTier: membership.membershipTier,
+        status: membership.status,
+      };
+      return next();
+    }
+
     switch (community.pricingModel) {
       case "FREE":
         break; // ACTIVE membership is sufficient

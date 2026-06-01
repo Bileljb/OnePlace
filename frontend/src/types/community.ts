@@ -1,4 +1,13 @@
 export type PricingModel = 'FREE' | 'FREEMIUM' | 'SUBSCRIPTION' | 'ONE_TIME'
+export type MediaType = 'IMAGE' | 'VIDEO'
+
+export interface CommunityMedia {
+  id: string
+  url: string
+  thumbnailUrl: string | null
+  type: MediaType
+  order: number
+}
 export type PlatformPlan = 'BASIC' | 'PRO'
 export type MembershipRole = 'creator' | 'admin' | 'member'
 export type MembershipStatus = 'ACTIVE' | 'CANCELLED' | 'BANNED' | 'EXPIRED'
@@ -54,6 +63,7 @@ export interface CommunityDetail {
   updatedAt: string
   creator: CommunityCreator
   pricing: CommunityPricing | null
+  media: CommunityMedia[]
   _count: { memberships: number; posts: number }
 }
 

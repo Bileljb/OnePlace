@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ImagePlus, Loader2, X } from 'lucide-react'
+import { ImagePlus, Loader2, Plus, Trash2, X } from 'lucide-react'
 import { communityApi } from '@/api/community'
 import { uploadFile } from '@/api/upload'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { getGradient } from '../utils/community.utils'
+import { AddMediaModal } from '../components/AddMediaModal'
+import type { CommunityMedia } from '@/types/community'
 
 // ─── ImageUploader ─────────────────────────────────────────────────────────────
 
@@ -94,6 +96,55 @@ function ImageUploader({
           e.target.value = ''
         }}
       />
+    </div>
+  )
+}
+
+// ─── MediaThumbnail ────────────────────────────────────────────────────────────
+
+function getYouTubeThumbnail(url: string): string | null {
+  const match = url.match(
+    /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/
+  )
+  return match ? `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg` : null
+}
+
+interface MediaThumbnailProps {
+  item: CommunityMedia
+  onDelete: () => void
+}
+
+function MediaThumbnail({ item, onDelete }: MediaThumbnailProps) {
+  const thumbSrc =
+    item.type === 'IMAGE'
+      ? item.url
+      : item.thumbnailUrl ?? getYouTubeThumbnail(item.url) ?? null
+
+  return (
+    <div className="group relative h-24 w-36 overflow-hidden rounded-xl border border-border bg-muted">
+      {thumbSrc ? (
+        <img src={thumbSrc} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground">
+          <span className="text-xs">Video</span>
+        </div>
+      )}
+      {item.type === 'VIDEO' && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="rounded-full bg-black/60 p-2">
+            <svg className="h-4 w-4 fill-white" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={onDelete}
+        className="absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-600"
+      >
+        <Trash2 className="h-3 w-3" />
+      </button>
     </div>
   )
 }
@@ -212,6 +263,36 @@ export function SettingsGeneral() {
 
   const isBusy = isPending || uploadingCover || uploadingIcon
 
+  // ── Media gallery ──
+  const [mediaModalOpen, setMediaModalOpen] = useState(false)
+
+  const { mutate: addMedia } = useMutation({
+    mutationFn: (vars: { url: string; type: 'IMAGE' | 'VIDEO'; thumbnailUrl?: string }) =>
+      communityApi.addMedia(id!, vars),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['community', id] })
+      toast.success('Media added')
+    },
+    onError: (err) => toast.error((err as Error).message),
+  })
+
+  const { mutate: deleteMedia } = useMutation({
+    mutationFn: (mediaId: string) => communityApi.deleteMedia(id!, mediaId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['community', id] })
+      toast.success('Media removed')
+    },
+    onError: (err) => toast.error((err as Error).message),
+  })
+
+  async function handleAddMedia(url: string, type: 'IMAGE' | 'VIDEO', thumbnailUrl?: string) {
+    await new Promise<void>((resolve, reject) => {
+      addMedia({ url, type, thumbnailUrl }, { onSuccess: () => resolve(), onError: reject })
+    })
+  }
+
+  const mediaItems: CommunityMedia[] = community?.media ?? []
+
   return (
     <div className="space-y-6">
       <div>
@@ -269,6 +350,32 @@ export function SettingsGeneral() {
         </div>
       </div>
 
+      {/* ── Media gallery ── */}
+      <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">Media</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Images and videos shown in your community's about page.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          {mediaItems.map((item) => (
+            <MediaThumbnail key={item.id} item={item} onDelete={() => deleteMedia(item.id)} />
+          ))}
+
+          {/* Add placeholder */}
+          <button
+            type="button"
+            onClick={() => setMediaModalOpen(true)}
+            className="flex h-24 w-36 flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border bg-muted/40 text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+          >
+            <Plus className="h-5 w-5" />
+            <span className="text-xs font-medium">Add media</span>
+          </button>
+        </div>
+      </div>
+
       {/* ── Info ── */}
       <div className="rounded-xl border border-border bg-card p-6 space-y-5">
         <h2 className="text-sm font-semibold text-foreground">Information</h2>
@@ -323,6 +430,12 @@ export function SettingsGeneral() {
           </Button>
         </div>
       </div>
+
+      <AddMediaModal
+        open={mediaModalOpen}
+        onClose={() => setMediaModalOpen(false)}
+        onAdd={handleAddMedia}
+      />
     </div>
   )
 }

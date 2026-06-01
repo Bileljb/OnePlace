@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -15,7 +15,16 @@ import {
   CheckSquare,
   Square,
   FileText,
+  Brain,
+  X,
+  Sparkles,
 } from 'lucide-react'
+import { aiApi, type QuizQuestion, type QuizResult, type ProgressCoachData } from '@/api/ai'
+import { MediaPlayer, MediaProvider } from '@vidstack/react'
+import { DefaultVideoLayout, defaultLayoutIcons } from '@vidstack/react/player/layouts/default'
+import type { MediaPlayerInstance, MediaTimeUpdateEventDetail } from '@vidstack/react'
+import '@vidstack/react/player/styles/default/theme.css'
+import '@vidstack/react/player/styles/default/layouts/video.css'
 import { courseApi } from '@/api/course'
 import { xpToast } from '@/lib/xpToast'
 import type { Course, CourseSection, Lesson, LessonSummary } from '@/types/course'
@@ -34,25 +43,27 @@ function VideoPlayer({
   savedPosition?: number | null
   onSavePosition?: (pos: number) => void
 }) {
+  const playerRef = useRef<MediaPlayerInstance>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const getEmbedUrl = (u: string) => {
-    const ytMatch = u.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
-    if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}`
-    const vimeoMatch = u.match(/vimeo\.com\/(\d+)/)
-    if (vimeoMatch) return `https://player.vimeo.com/video/${vimeoMatch[1]}`
-    const loomMatch = u.match(/loom\.com\/share\/([a-zA-Z0-9]+)/)
-    if (loomMatch) return `https://www.loom.com/embed/${loomMatch[1]}`
-    return null
-  }
+  const flush = useCallback(() => {
+    if (!onSavePosition || !playerRef.current) return
+    if (timerRef.current) clearTimeout(timerRef.current)
+    onSavePosition(Math.floor(playerRef.current.currentTime))
+  }, [onSavePosition])
 
-  const embedUrl = getEmbedUrl(url)
+  useEffect(() => {
+    window.addEventListener('beforeunload', flush)
+    return () => window.removeEventListener('beforeunload', flush)
+  }, [flush])
 
-  if (embedUrl) {
+  // Loom has no Vidstack provider — keep as iframe
+  const loomMatch = url.match(/loom\.com\/share\/([a-zA-Z0-9]+)/)
+  if (loomMatch) {
     return (
       <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black">
         <iframe
-          src={embedUrl}
+          src={`https://www.loom.com/embed/${loomMatch[1]}`}
           className="absolute inset-0 h-full w-full"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
@@ -61,25 +72,28 @@ function VideoPlayer({
     )
   }
 
+  // Vidstack handles YouTube, Vimeo, MP4, HLS (.m3u8) automatically
   return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black">
-      <video
-        src={url}
-        controls
-        className="h-full w-full"
-        onLoadedMetadata={(e) => {
-          if (savedPosition && savedPosition > 0) {
-            e.currentTarget.currentTime = savedPosition
-          }
-        }}
-        onTimeUpdate={(e) => {
-          if (!onSavePosition) return
-          const pos = Math.floor(e.currentTarget.currentTime)
-          if (timerRef.current) clearTimeout(timerRef.current)
-          timerRef.current = setTimeout(() => onSavePosition(pos), 5000)
-        }}
-      />
-    </div>
+    <MediaPlayer
+      ref={playerRef}
+      src={url}
+      className="w-full overflow-hidden rounded-xl"
+      onCanPlay={() => {
+        if (savedPosition && savedPosition > 0 && playerRef.current) {
+          playerRef.current.currentTime = savedPosition
+        }
+      }}
+      onTimeUpdate={({ currentTime }: MediaTimeUpdateEventDetail) => {
+        if (!onSavePosition) return
+        if (timerRef.current) clearTimeout(timerRef.current)
+        timerRef.current = setTimeout(() => onSavePosition(Math.floor(currentTime)), 5000)
+      }}
+      onPause={flush}
+      onEnded={flush}
+    >
+      <MediaProvider />
+      <DefaultVideoLayout icons={defaultLayoutIcons} />
+    </MediaPlayer>
   )
 }
 
@@ -175,6 +189,172 @@ function SidebarSection({
   )
 }
 
+// ─── Progress Coach Banner ────────────────────────────────────────────────────
+
+function ProgressCoachBanner({ communityId }: { communityId: string }) {
+  const [dismissed, setDismissed] = useState(false)
+  const { data, isLoading } = useQuery({
+    queryKey: ['progress-coach', communityId],
+    queryFn: () => aiApi.getProgressCoach(communityId),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const coach = data?.data as ProgressCoachData | undefined
+  if (isLoading || !coach || dismissed) return null
+  if (coach.daysSinceActive !== null && coach.daysSinceActive < 2) return null
+
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
+      <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-foreground">Progress Coach</p>
+        <p className="mt-0.5 text-sm text-muted-foreground">{coach.message}</p>
+        {coach.lastCourse && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Last active in: <span className="font-medium text-foreground">{coach.lastCourse}</span>
+            {coach.lastLesson && ` — ${coach.lastLesson}`}
+          </p>
+        )}
+      </div>
+      <button onClick={() => setDismissed(true)} className="shrink-0 text-muted-foreground hover:text-foreground">
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  )
+}
+
+// ─── Quiz Modal ───────────────────────────────────────────────────────────────
+
+function QuizModal({ lessonId, onClose }: { lessonId: string; onClose: () => void }) {
+  const [selected, setSelected] = useState<(number | null)[]>([])
+  const [submitted, setSubmitted] = useState(false)
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['quiz', lessonId],
+    queryFn: () => aiApi.generateQuiz(lessonId),
+    staleTime: Infinity,
+    timeout: 120_000,
+  })
+
+  const quizData = data?.data as QuizResult | undefined
+  const questions = quizData?.questions ?? []
+  const source = quizData?.transcriptSource
+
+  useEffect(() => {
+    if (questions.length) setSelected(new Array(questions.length).fill(null))
+  }, [questions.length])
+
+  const score = submitted
+    ? questions.filter((q, i) => selected[i] === q.correctIndex).length
+    : 0
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-background shadow-xl">
+        <div className="sticky top-0 flex items-center justify-between border-b border-border bg-background p-5">
+          <div className="flex items-center gap-2">
+            <Brain className="h-5 w-5 text-primary" />
+            <h2 className="text-base font-semibold text-foreground">Study Buddy Quiz</h2>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-6">
+          {isLoading && (
+            <div className="flex flex-col items-center gap-3 py-12">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
+              <p className="text-sm font-medium text-foreground">Analyzing lesson content...</p>
+              <p className="text-xs text-muted-foreground text-center max-w-xs">
+                Transcribing your video and generating questions. This takes 10–30 seconds the first time.
+              </p>
+            </div>
+          )}
+
+          {isError && (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Failed to generate quiz. Please try again.
+            </p>
+          )}
+
+          {source && !isLoading && (
+            <p className="text-xs text-muted-foreground text-center">
+              {source === 'youtube_captions' && 'Quiz based on YouTube captions'}
+              {source === 'whisper' && 'Quiz based on AI video transcription'}
+              {source === 'cached' && 'Quiz based on saved transcript'}
+              {source === 'none' && 'Quiz based on lesson topic (no transcript available)'}
+            </p>
+          )}
+
+          {submitted && (
+            <div className={`rounded-xl p-4 text-center ${score >= questions.length * 0.8 ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}>
+              <p className="text-lg font-bold">{score} / {questions.length} correct</p>
+              <p className="text-sm mt-1">{score === questions.length ? 'Perfect score!' : score >= questions.length * 0.8 ? 'Great job!' : 'Keep studying!'}</p>
+            </div>
+          )}
+
+          {questions.map((q: QuizQuestion, qi: number) => (
+            <div key={qi} className="space-y-3">
+              <p className="text-sm font-medium text-foreground">
+                {qi + 1}. {q.question}
+              </p>
+              <div className="space-y-2">
+                {q.options.map((opt: string, oi: number) => {
+                  const isSelected = selected[qi] === oi
+                  const isCorrect = submitted && oi === q.correctIndex
+                  const isWrong = submitted && isSelected && oi !== q.correctIndex
+
+                  return (
+                    <button
+                      key={oi}
+                      disabled={submitted}
+                      onClick={() => setSelected((s) => { const n = [...s]; n[qi] = oi; return n })}
+                      className={`w-full rounded-lg border px-4 py-2.5 text-left text-sm transition-colors ${
+                        isCorrect
+                          ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700'
+                          : isWrong
+                          ? 'border-red-500 bg-red-500/10 text-red-700'
+                          : isSelected
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border bg-card text-foreground hover:bg-muted'
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  )
+                })}
+              </div>
+              {submitted && (
+                <p className="text-xs text-muted-foreground italic">{q.explanation}</p>
+              )}
+            </div>
+          ))}
+
+          {questions.length > 0 && !submitted && (
+            <button
+              disabled={selected.some((s) => s === null)}
+              onClick={() => setSubmitted(true)}
+              className="w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              Submit answers
+            </button>
+          )}
+
+          {submitted && (
+            <button
+              onClick={() => { setSelected(new Array(questions.length).fill(null)); setSubmitted(false) }}
+              className="w-full rounded-lg border border-border py-2.5 text-sm font-semibold text-foreground hover:bg-muted"
+            >
+              Try again
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Lesson View ──────────────────────────────────────────────────────────────
 
 function LessonView({
@@ -183,12 +363,14 @@ function LessonView({
   courseId,
   sectionId,
   isCompleted,
+  onQuiz,
 }: {
   lesson: Lesson
   communityId: string
   courseId: string
   sectionId: string
   isCompleted: boolean
+  onQuiz: () => void
 }) {
   const queryClient = useQueryClient()
   const [showTranscript, setShowTranscript] = useState(false)
@@ -234,25 +416,30 @@ function LessonView({
             <p className="mt-1 text-sm text-muted-foreground">{lesson.description}</p>
           )}
         </div>
-        <Button
-          size="sm"
-          variant={isCompleted ? 'outline' : 'default'}
-          onClick={() => (isCompleted ? markIncomplete() : markComplete())}
-          disabled={completing || uncompleting}
-          className="shrink-0"
-        >
-          {isCompleted ? (
-            <>
-              <CheckSquare className="h-4 w-4" />
-              Completed
-            </>
-          ) : (
-            <>
-              <Square className="h-4 w-4" />
-              Mark complete
-            </>
-          )}
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button size="sm" variant="outline" onClick={onQuiz}>
+            <Brain className="h-4 w-4" />
+            Quiz me
+          </Button>
+          <Button
+            size="sm"
+            variant={isCompleted ? 'outline' : 'default'}
+            onClick={() => (isCompleted ? markIncomplete() : markComplete())}
+            disabled={completing || uncompleting}
+          >
+            {isCompleted ? (
+              <>
+                <CheckSquare className="h-4 w-4" />
+                Completed
+              </>
+            ) : (
+              <>
+                <Square className="h-4 w-4" />
+                Mark complete
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Content */}
@@ -389,6 +576,7 @@ export function CoursePage() {
   }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [quizOpen, setQuizOpen] = useState(false)
 
   const { data: courseData, isLoading: courseLoading, error: courseError } = useQuery({
     queryKey: ['course', courseId],
@@ -479,6 +667,13 @@ export function CoursePage() {
 
   return (
     <div className="space-y-4">
+      {quizOpen && lessonId && (
+        <QuizModal lessonId={lessonId} onClose={() => setQuizOpen(false)} />
+      )}
+
+      {/* Progress Coach */}
+      {communityId && <ProgressCoachBanner communityId={communityId} />}
+
       {/* Header */}
       <div>
         <button
@@ -541,6 +736,7 @@ export function CoursePage() {
               courseId={courseId!}
               sectionId={sectionId}
               isCompleted={completedIds.has(lesson.id)}
+              onQuiz={() => setQuizOpen(true)}
             />
           ) : (
             <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card py-16 text-center">

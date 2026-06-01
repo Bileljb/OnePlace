@@ -17,7 +17,11 @@ export const uploadApi = {
       .then((r) => r.data),
 }
 
-export async function uploadFile(file: File, folder: UploadFolder): Promise<string> {
+export async function uploadFile(
+  file: File,
+  folder: UploadFolder,
+  onProgress?: (percent: number) => void,
+): Promise<string> {
   const res = await uploadApi.presign({ filename: file.name, contentType: file.type, folder })
   const { uploadUrl, fileUrl, maxSize } = res.data!
 
@@ -25,15 +29,26 @@ export async function uploadFile(file: File, folder: UploadFolder): Promise<stri
     throw new Error(`File is too large. Maximum size is ${Math.round(maxSize / 1024 / 1024)} MB.`)
   }
 
-  const uploadRes = await fetch(uploadUrl, {
-    method: 'PUT',
-    body: file,
-    headers: { 'Content-Type': file.type },
-  })
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', uploadUrl)
+    xhr.setRequestHeader('Content-Type', file.type)
 
-  if (!uploadRes.ok) {
-    throw new Error('Upload to storage failed. Please try again.')
-  }
+    if (onProgress) {
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
+      })
+    }
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve()
+      else reject(new Error('Upload to storage failed. Please try again.'))
+    })
+    xhr.addEventListener('error', () => reject(new Error('Upload to storage failed. Please try again.')))
+    xhr.addEventListener('abort', () => reject(new Error('Upload cancelled.')))
+
+    xhr.send(file)
+  })
 
   return fileUrl
 }

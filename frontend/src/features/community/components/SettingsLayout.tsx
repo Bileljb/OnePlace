@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, Settings, DollarSign, Users } from 'lucide-react'
+import { ChevronLeft, Settings, DollarSign, Users, BookOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { communityApi } from '@/api/community'
 
@@ -71,6 +71,9 @@ export function SettingsLayout() {
           <SettingsNavItem to={`/communities/${id}/settings/members`} icon={Users}>
             Members
           </SettingsNavItem>
+          <SettingsNavItem to={`/communities/${id}/settings/knowledge`} icon={BookOpen}>
+            Knowledge Base
+          </SettingsNavItem>
         </nav>
 
         {/* Mobile nav */}
@@ -79,6 +82,7 @@ export function SettingsLayout() {
             { to: 'general', label: 'General' },
             { to: 'pricing', label: 'Pricing' },
             { to: 'members', label: 'Members' },
+            { to: 'knowledge', label: 'Knowledge' },
           ].map((item) => (
             <NavLink
               key={item.to}

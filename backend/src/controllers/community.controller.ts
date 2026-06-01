@@ -9,8 +9,10 @@ export async function listCommunities(
   next: NextFunction
 ): Promise<void> {
   try {
-    const communities = await communityService.listCommunities();
-    res.status(200).json({ success: true, data: { communities } });
+    const page = parseInt(String(_req.query.page ?? 1), 10) || 1;
+    const limit = parseInt(String(_req.query.limit ?? 30), 10) || 30;
+    const result = await communityService.listCommunities(page, limit);
+    res.status(200).json({ success: true, data: result });
   } catch (err) {
     next(err);
   }
@@ -120,6 +122,43 @@ export async function changePricingModel(
       pricingModel
     );
     res.status(200).json({ success: true, data: { community } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// POST /api/v1/communities/:id/media
+export async function addCommunityMedia(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { url, type, thumbnailUrl } = req.body as { url: string; type: "IMAGE" | "VIDEO"; thumbnailUrl?: string };
+    const media = await communityService.addCommunityMedia(
+      req.params.id as string,
+      req.user!.id,
+      { url, type, thumbnailUrl }
+    );
+    res.status(201).json({ success: true, data: { media } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// DELETE /api/v1/communities/:id/media/:mediaId
+export async function deleteCommunityMedia(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    await communityService.deleteCommunityMedia(
+      req.params.id as string,
+      req.user!.id,
+      req.params.mediaId as string
+    );
+    res.status(200).json({ success: true });
   } catch (err) {
     next(err);
   }
@@ -249,9 +288,11 @@ export async function getCommunityPosts(
   next: NextFunction
 ): Promise<void> {
   try {
-    const q = req.query.q as string | undefined
-    const posts = await communityService.getCommunityPosts(req.params.communityId as string, q || undefined);
-    res.status(200).json({ success: true, data: { posts } });
+    const q = req.query.q as string | undefined;
+    const page = parseInt(String(req.query.page ?? 1), 10) || 1;
+    const limit = parseInt(String(req.query.limit ?? 30), 10) || 30;
+    const result = await communityService.getCommunityPosts(req.params.communityId as string, req.user?.id, q || undefined, page, limit);
+    res.status(200).json({ success: true, data: result });
   } catch (err) {
     next(err);
   }

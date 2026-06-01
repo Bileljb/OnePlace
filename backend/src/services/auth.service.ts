@@ -43,6 +43,15 @@ export async function register(input: RegisterInput): Promise<SafeUser> {
   if (password.length < 8) {
     throw new AppError("Password must be at least 8 characters", 400);
   }
+  if (!/[A-Z]/.test(password)) {
+    throw new AppError("Password must contain at least one uppercase letter", 400);
+  }
+  if (!/[0-9]/.test(password)) {
+    throw new AppError("Password must contain at least one number", 400);
+  }
+  if (!/[^A-Za-z0-9]/.test(password)) {
+    throw new AppError("Password must contain at least one special character", 400);
+  }
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {

@@ -3,9 +3,9 @@ import type { ApiResponse } from '@/types/auth'
 import type { Comment, Post, PostType } from '@/types/post'
 
 export const postApi = {
-  list: (communityId: string, q?: string) =>
+  list: (communityId: string, q?: string, page = 1, limit = 30) =>
     api
-      .get<ApiResponse<{ posts: Post[] }>>(`/communities/${communityId}/posts`, { params: q ? { q } : undefined })
+      .get<ApiResponse<{ posts: Post[]; total: number; totalPages: number; page: number }>>(`/communities/${communityId}/posts`, { params: { ...(q ? { q } : {}), page, limit } })
       .then((r) => r.data),
 
   getById: (communityId: string, postId: string) =>
@@ -43,4 +43,13 @@ export const postApi = {
     api
       .delete(`/communities/${communityId}/posts/${postId}/comments/${commentId}`)
       .then((r) => r.data),
+
+  like: (communityId: string, postId: string) =>
+    api.post(`/communities/${communityId}/posts/${postId}/like`).then((r) => r.data),
+
+  unlike: (communityId: string, postId: string) =>
+    api.delete(`/communities/${communityId}/posts/${postId}/like`).then((r) => r.data),
+
+  togglePin: (communityId: string, postId: string) =>
+    api.patch<ApiResponse<{ post: Post }>>(`/communities/${communityId}/posts/${postId}/pin`).then((r) => r.data),
 }

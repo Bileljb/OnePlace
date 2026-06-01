@@ -1,26 +1,22 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Pin, MessageSquare, Trash2, Plus, Image, Video, FileText, BarChart2, Search, X } from 'lucide-react'
+import { Pin, MessageSquare, Trash2, Plus, BarChart2, Search, X, Image, PlayCircle, Heart } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
 import { postApi } from '@/api/post'
 import { useAuthStore } from '@/store/auth.store'
 import type { Post } from '@/types/post'
 import { Button } from '@/components/ui/button'
+import { Pagination } from '@/components/ui/pagination'
 import { CreatePostModal } from '../components/CreatePostModal'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
+import { OnboardingChecklist } from '../components/OnboardingChecklist'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function authorInitials(post: Post) {
   return `${post.author.firstname[0]}${post.author.lastname[0]}`.toUpperCase()
-}
-
-const TYPE_ICON = {
-  TEXT: FileText,
-  IMAGE: Image,
-  VIDEO: Video,
 }
 
 function parsePoll(content: string): { options: string[] } | null {
@@ -35,88 +31,185 @@ function parsePoll(content: string): { options: string[] } | null {
 
 // ─── PostCard ─────────────────────────────────────────────────────────────────
 
+function parseMedia(content: string): { mediaUrl: string; text?: string } | null {
+  try {
+    const data = JSON.parse(content)
+    if (data?.mediaUrl) return { mediaUrl: data.mediaUrl, text: data.text }
+  } catch {}
+  if (content.startsWith('http://') || content.startsWith('https://')) return { mediaUrl: content }
+  return null
+}
+
+function MediaThumbnail({ post }: { post: Post }) {
+  const cls = 'h-24 w-32 shrink-0 self-start rounded-xl object-cover'
+  if (post.type === 'IMAGE') {
+    const media = parseMedia(post.content)
+    return media ? (
+      <img src={media.mediaUrl} alt="" className={cls} />
+    ) : (
+      <div className={`flex items-center justify-center bg-muted ${cls}`}>
+        <Image className="h-6 w-6 text-muted-foreground/50" />
+      </div>
+    )
+  }
+  if (post.type === 'VIDEO') {
+    return (
+      <div className={`flex items-center justify-center bg-muted ${cls}`}>
+        <PlayCircle className="h-8 w-8 text-muted-foreground/60" />
+      </div>
+    )
+  }
+  return null
+}
+
+function getTextPreview(content: string): string {
+  try {
+    const data = JSON.parse(content)
+    if (data?.text) return data.text
+    if (data?.poll === true) return ''
+  } catch {}
+  if (content.startsWith('http://') || content.startsWith('https://')) return ''
+  return content
+}
+
 function PostCard({
   post,
   communityId,
   onDelete,
+  onPin,
   canDelete,
+  canPin,
 }: {
   post: Post
   communityId: string
   onDelete: (postId: string) => void
+  onPin: (postId: string) => void
   canDelete: boolean
+  canPin: boolean
 }) {
   const navigate = useNavigate()
-  const TypeIcon = TYPE_ICON[post.type]
+  const queryClient = useQueryClient()
+  const poll = parsePoll(post.content)
+  const preview = poll ? null : getTextPreview(post.content)
+  const hasMedia = post.type === 'IMAGE' || post.type === 'VIDEO'
+
+  const { mutate: toggleLike } = useMutation({
+    mutationFn: () =>
+      post.likedByMe
+        ? postApi.unlike(communityId, post.id)
+        : postApi.like(communityId, post.id),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['posts', communityId] })
+      const previousEntries = queryClient.getQueriesData({ queryKey: ['posts', communityId] })
+      queryClient.setQueriesData({ queryKey: ['posts', communityId] }, (old: any) => {
+        if (!old?.data?.posts) return old
+        return {
+          ...old,
+          data: {
+            ...old.data,
+            posts: old.data.posts.map((p: Post) =>
+              p.id === post.id
+                ? { ...p, likedByMe: !p.likedByMe, _count: { ...p._count, likes: p._count.likes + (p.likedByMe ? -1 : 1) } }
+                : p
+            ),
+          },
+        }
+      })
+      return { previousEntries }
+    },
+    onError: (_err, _vars, ctx) => {
+      ctx?.previousEntries?.forEach(([key, data]) => queryClient.setQueryData(key, data))
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['posts', communityId] }),
+  })
 
   return (
     <div
       onClick={() => navigate(`/communities/${communityId}/community/posts/${post.id}`)}
-      className="group cursor-pointer rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/40"
+      className="group flex cursor-pointer items-start gap-4 rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/40"
     >
-      {/* Top row */}
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-            {authorInitials(post)}
-          </div>
-          <div className="flex items-center gap-1.5 text-sm">
-            <span className="font-medium text-foreground">
-              {post.author.firstname} {post.author.lastname}
-            </span>
-            <span className="text-muted-foreground">·</span>
-            <span className="text-muted-foreground">
-              {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {post.isPinned && <Pin className="h-3.5 w-3.5 text-primary" />}
-          {canDelete && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onDelete(post.id)
-              }}
-              className="rounded p-1 text-muted-foreground opacity-0 transition-all hover:text-destructive group-hover:opacity-100"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Content */}
-      <h3 className="mb-1.5 font-semibold text-foreground">{post.title}</h3>
-      {(() => {
-        const poll = parsePoll(post.content)
-        if (poll) {
-          return (
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <BarChart2 className="h-3.5 w-3.5 shrink-0" />
-              <span>{poll.options.length} options</span>
+      {/* Main content */}
+      <div className="min-w-0 flex-1">
+        {/* Top row */}
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+              {authorInitials(post)}
             </div>
-          )
-        }
-        return <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">{post.content}</p>
-      })()}
+            <div className="flex items-center gap-1.5 text-sm">
+              <span className="font-medium text-foreground">
+                {post.author.firstname} {post.author.lastname}
+              </span>
+              <span className="text-muted-foreground">·</span>
+              <span className="text-muted-foreground">
+                {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            {canPin && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onPin(post.id) }}
+                title={post.isPinned ? 'Unpin post' : 'Pin post'}
+                className={`rounded p-1 transition-all opacity-0 group-hover:opacity-100 ${
+                  post.isPinned
+                    ? 'text-primary opacity-100'
+                    : 'text-muted-foreground hover:text-primary'
+                }`}
+              >
+                <Pin className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {!canPin && post.isPinned && <Pin className="h-3.5 w-3.5 text-primary" />}
+            {canDelete && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(post.id) }}
+                className="rounded p-1 text-muted-foreground opacity-0 transition-all hover:text-destructive group-hover:opacity-100"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
 
-      {/* Footer */}
-      <div className="mt-4 flex items-center gap-3">
-        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-          <TypeIcon className="h-3.5 w-3.5" />
-          {post.type}
-        </span>
-        {post.category && (
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground/70">
-            {post.category}
-          </span>
-        )}
-        <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-          <MessageSquare className="h-3.5 w-3.5" />
-          {post._count.comments}
+        {/* Title */}
+        <h3 className="mb-1.5 font-semibold text-foreground">{post.title}</h3>
+
+        {/* Body preview */}
+        {poll ? (
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <BarChart2 className="h-3.5 w-3.5 shrink-0" />
+            <span>{poll.options.length} options</span>
+          </div>
+        ) : preview ? (
+          <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">{preview}</p>
+        ) : null}
+
+        {/* Footer */}
+        <div className="mt-4 flex items-center gap-3">
+          {post.category && (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground/70">
+              {post.category}
+            </span>
+          )}
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleLike() }}
+              className={`flex items-center gap-1 transition-colors hover:text-rose-500 ${post.likedByMe ? 'text-rose-500' : ''}`}
+            >
+              <Heart className={`h-3.5 w-3.5 ${post.likedByMe ? 'fill-rose-500' : ''}`} />
+              {post._count.likes}
+            </button>
+            <div className="flex items-center gap-1">
+              <MessageSquare className="h-3.5 w-3.5" />
+              {post._count.comments}
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Thumbnail */}
+      {hasMedia && <MediaThumbnail post={post} />}
     </div>
   )
 }
@@ -132,17 +225,18 @@ export function Feed() {
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [page, setPage] = useState(1)
 
   const isMock = communityId?.startsWith('mock-')
 
   useEffect(() => {
-    const t = setTimeout(() => setSearchQuery(searchInput.trim()), 400)
+    const t = setTimeout(() => { setSearchQuery(searchInput.trim()); setPage(1) }, 400)
     return () => clearTimeout(t)
   }, [searchInput])
 
   const { data, isLoading } = useQuery({
-    queryKey: ['posts', communityId, searchQuery],
-    queryFn: () => postApi.list(communityId!, searchQuery || undefined),
+    queryKey: ['posts', communityId, searchQuery, page],
+    queryFn: () => postApi.list(communityId!, searchQuery || undefined, page, 30),
     enabled: !!communityId && !isMock,
   })
 
@@ -156,7 +250,41 @@ export function Feed() {
     onError: (err) => toast.error((err as Error).message),
   })
 
+  const { data: communityData } = useQuery({
+    queryKey: ['community', communityId],
+    queryFn: () => import('@/api/community').then((m) => m.communityApi.getById(communityId!)),
+    enabled: !!communityId && !isMock,
+  })
+  const isCreator = communityData?.data?.community?.creator?.id === user?.id
+
+  const { mutate: togglePin } = useMutation({
+    mutationFn: (postId: string) => postApi.togglePin(communityId!, postId),
+    onMutate: async (postId) => {
+      await queryClient.cancelQueries({ queryKey: ['posts', communityId] })
+      const prev = queryClient.getQueriesData({ queryKey: ['posts', communityId] })
+      queryClient.setQueriesData({ queryKey: ['posts', communityId] }, (old: any) => {
+        if (!old?.data?.posts) return old
+        return {
+          ...old,
+          data: {
+            ...old.data,
+            posts: old.data.posts.map((p: Post) =>
+              p.id === postId ? { ...p, isPinned: !p.isPinned } : p
+            ),
+          },
+        }
+      })
+      return { prev }
+    },
+    onError: (_err, _vars, ctx) => {
+      ctx?.prev?.forEach(([key, data]) => queryClient.setQueryData(key, data))
+      toast.error('Failed to update pin')
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['posts', communityId] }),
+  })
+
   const posts = data?.data?.posts ?? []
+  const totalPages = data?.data?.totalPages ?? 1
 
   // Derive category list from posts
   const categories = [
@@ -217,6 +345,14 @@ export function Feed() {
         </div>
       )}
 
+      {/* Creator onboarding checklist */}
+      {!isMock && (
+        <OnboardingChecklist
+          communityId={communityId!}
+          onCreatePost={() => setCreateOpen(true)}
+        />
+      )}
+
       {/* Category tabs */}
       {categories.length > 1 && (
         <div className="flex gap-1 overflow-x-auto">
@@ -259,11 +395,21 @@ export function Feed() {
               key={post.id}
               post={post}
               communityId={communityId!}
-              canDelete={user?.id === post.authorId}
+              canDelete={user?.id === post.authorId || isCreator}
+              canPin={isCreator}
               onDelete={(id) => setDeletingPostId(id)}
+              onPin={(id) => togglePin(id)}
             />
           ))}
         </div>
+      )}
+
+      {!isMock && totalPages > 1 && (
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onChange={(p) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+        />
       )}
 
       <CreatePostModal

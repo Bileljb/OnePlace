@@ -8,5 +8,12 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
+    conditions: ['development', 'browser', 'module', 'jsnext:main', 'jsnext'],
+  },
+  optimizeDeps: {
+    include: [
+      '@vidstack/react',
+      '@vidstack/react/player/layouts/default',
+    ],
   },
 })

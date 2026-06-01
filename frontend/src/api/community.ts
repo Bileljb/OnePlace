@@ -6,6 +6,8 @@ import type {
   CommunityDetail,
   CommunityListItem,
   CommunityMember,
+  CommunityMedia,
+  MediaType,
   Membership,
   PlatformPlan,
   PricingModel,
@@ -13,9 +15,9 @@ import type {
 } from '@/types/community'
 
 export const communityApi = {
-  list: () =>
+  list: (page = 1, limit = 30) =>
     api
-      .get<ApiResponse<{ communities: CommunityListItem[] }>>('/communities')
+      .get<ApiResponse<{ communities: CommunityListItem[]; total: number; totalPages: number; page: number }>>('/communities', { params: { page, limit } })
       .then((r) => r.data),
 
   getById: (id: string) =>
@@ -85,4 +87,12 @@ export const communityApi = {
     api
       .get<ApiResponse<{ members: CommunityMember[] }>>(`/communities/${id}/members`)
       .then((r) => r.data),
+
+  addMedia: (id: string, data: { url: string; type: MediaType; thumbnailUrl?: string | null }) =>
+    api
+      .post<ApiResponse<{ media: CommunityMedia }>>(`/communities/${id}/media`, data)
+      .then((r) => r.data),
+
+  deleteMedia: (id: string, mediaId: string) =>
+    api.delete<ApiResponse>(`/communities/${id}/media/${mediaId}`).then((r) => r.data),
 }

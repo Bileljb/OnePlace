@@ -35,3 +35,10 @@ export const S3_ACCESS_KEY_ID = process.env.S3_ACCESS_KEY_ID ?? "";
 export const S3_SECRET_ACCESS_KEY = process.env.S3_SECRET_ACCESS_KEY ?? "";
 export const S3_ENDPOINT = process.env.S3_ENDPOINT ?? ""; // Required for Cloudflare R2
 export const S3_CDN_URL = process.env.S3_CDN_URL ?? "";
+
+// Groq AI
+export const GROQ_API_KEY = process.env.GROQ_API_KEY ?? "";
+
+// HuggingFace (for embeddings — free tier works without a token, but a free
+// HF token removes rate limits: https://huggingface.co/settings/tokens)
+export const HF_API_KEY = process.env.HF_API_KEY ?? "";
