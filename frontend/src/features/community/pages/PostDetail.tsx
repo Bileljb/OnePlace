@@ -307,7 +307,7 @@ export function PostDetail() {
           )}
           <div className="ml-auto flex items-center gap-4 text-sm text-muted-foreground">
             <button
-              onClick={toggleLike}
+              onClick={() => toggleLike()}
               className={`flex items-center gap-1.5 transition-colors hover:text-rose-500 ${post.likedByMe ? 'text-rose-500' : ''}`}
             >
               <Heart className={`h-4 w-4 ${post.likedByMe ? 'fill-rose-500' : ''}`} />

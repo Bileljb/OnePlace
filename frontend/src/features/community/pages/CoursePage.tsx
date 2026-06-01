@@ -233,7 +233,6 @@ function QuizModal({ lessonId, onClose }: { lessonId: string; onClose: () => voi
     queryKey: ['quiz', lessonId],
     queryFn: () => aiApi.generateQuiz(lessonId),
     staleTime: Infinity,
-    timeout: 120_000,
   })
 
   const quizData = data?.data as QuizResult | undefined
