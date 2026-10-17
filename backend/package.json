@@ -6,8 +6,9 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "build": "tsc --build",
+    "build": "prisma generate && tsc --build",
     "start": "node dist/index.js",
+    "migrate:deploy": "prisma migrate deploy",
     "dev": "tsx watch src/index.ts",
     "seed": "tsx prisma/seed.ts"
   },
