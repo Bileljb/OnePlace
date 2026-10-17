@@ -9,7 +9,8 @@ services:
     region: virginia # closest to the Neon database (us-east-1)
     rootDir: backend
     # Free instances have no pre-deploy step, so migrations run at the end of the build.
-    buildCommand: npm ci && npm run build && npm run migrate:deploy
+    # --include=dev: NODE_ENV=production makes npm skip devDependencies (typescript, @types/*) needed to build.
+    buildCommand: npm ci --include=dev && npm run build && npm run migrate:deploy
     startCommand: npm start
     healthCheckPath: /api/v1/health
     autoDeploy: true
