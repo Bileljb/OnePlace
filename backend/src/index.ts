@@ -13,7 +13,7 @@ import aiRouter from './routes/ai.routes.js';
 import knowledgeRouter from './routes/knowledge.routes.js';
 import { startExpiryJob } from './jobs/expiry.job.js';
 import errorMiddleware from './middlewares/error.middleware.js';
-import { connectDB, disconnectDB } from './database/db.js';
+import { connectDB, disconnectDB, prisma } from './database/db.js';
 const app = express()
 
 //Middleware
@@ -24,6 +24,17 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser())
+
+// Health check for the hosting platform and uptime monitors (also verifies the DB connection)
+app.get('/api/v1/health', async (req: Request, res: Response) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.status(200).json({ status: 'ok', database: 'ok' });
+  } catch {
+    res.status(503).json({ status: 'error', database: 'unreachable' });
+  }
+});
+
 app.use('/api/v1/auth', authRouter)
 app.use('/api/v1/membership', membershipRouter)
 app.use('/api/v1/user', userRouter)
