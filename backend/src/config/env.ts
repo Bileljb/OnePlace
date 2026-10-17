@@ -25,7 +25,7 @@ export const EMAIL_PASS = process.env.EMAIL_PASS ?? "";
 export const EMAIL_FROM = process.env.EMAIL_FROM ?? "noreply@oneplace.app";
 
 // Client URL (for email links)
-export const CLIENT_URL = process.env.CLIENT_URL ?? "http://localhost:3000";
+export const CLIENT_URL = process.env.CLIENT_URL ?? "http://localhost:5173";
 
 // S3 / Cloudflare R2 (file uploads)
 // R2 is S3-compatible — set S3_REGION to "auto" and point S3_ENDPOINT to your R2 endpoint.

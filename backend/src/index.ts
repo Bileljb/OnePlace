@@ -1,7 +1,7 @@
 import express, { type Request, type Response } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import {PORT} from './config/env.js';
+import { PORT, CLIENT_URL } from './config/env.js';
 import authRouter from './routes/auth.routes.js';
 import membershipRouter from './routes/membership.route.js';
 import userRouter from './routes/user.routes.js';
@@ -18,7 +18,7 @@ const app = express()
 
 //Middleware
 app.use(cors({
-  origin: process.env.CLIENT_URL ?? 'http://localhost:5173',
+  origin: CLIENT_URL,
   credentials: true,
 }));
 app.use(express.json());
