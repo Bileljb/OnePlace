@@ -1,7 +1,25 @@
 import nodemailer from "nodemailer";
-import { EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS, EMAIL_FROM, CLIENT_URL, NODE_ENV } from "../config/env.js";
+import { EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS, EMAIL_FROM, RESEND_API_KEY, CLIENT_URL, NODE_ENV } from "../config/env.js";
 
 // ─── Transporter ──────────────────────────────────────────────────────────────
+
+const SEND_TIMEOUT_MS = 10_000;
+
+// Render's free tier blocks outbound SMTP ports, so Resend is called over HTTPS.
+// An SMTP config pointing at smtp.resend.com reuses its password as the API key.
+const resendApiKey = RESEND_API_KEY || (EMAIL_HOST === "smtp.resend.com" ? EMAIL_PASS : "");
+
+async function sendWithResend(to: string, subject: string, html: string): Promise<void> {
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${resendApiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: EMAIL_FROM, to, subject, html }),
+    signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    throw new Error(`Resend API error ${res.status}: ${await res.text()}`);
+  }
+}
 
 function createTransporter() {
   if (!EMAIL_HOST || !EMAIL_USER || !EMAIL_PASS) return null;
@@ -11,10 +29,18 @@ function createTransporter() {
     secure: EMAIL_PORT === 465,
     auth: { user: EMAIL_USER, pass: EMAIL_PASS },
     tls: { rejectUnauthorized: false },
+    connectionTimeout: SEND_TIMEOUT_MS,
+    greetingTimeout: SEND_TIMEOUT_MS,
+    socketTimeout: SEND_TIMEOUT_MS,
   });
 }
 
 async function sendMail(to: string, subject: string, html: string, devUrl?: string): Promise<void> {
+  if (resendApiKey) {
+    await sendWithResend(to, subject, html);
+    return;
+  }
+
   const transporter = createTransporter();
 
   if (!transporter) {
